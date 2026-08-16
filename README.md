@@ -2,6 +2,8 @@
 
 余音是一款面向 Android 的本地音乐播放器。它通过系统文件选择器读取用户授权的音乐文件夹，不依赖媒体库即可浏览目录并播放本地音频。
 
+本项目完全由ChatGPT开发。起因是想睡觉时听书，需要自动定时功能，但找了一圈没找到，故借助AI开发了该软件，希望帮到大家。项目不完善，欢迎PR
+
 ## 功能
 
 - 使用 Android Storage Access Framework 添加一个或多个音乐文件夹
@@ -11,10 +13,7 @@
 - 顺序播放、列表循环、单曲循环和随机播放
 - 定时暂停，以及“当前音频播放完后暂停”
 - 浅色、深色和跟随系统主题
-- 首页顶栏固定、隐藏或随滚动自动隐藏
-- 可选的锁屏显示和播放页静态封面
-- 记忆音乐库、播放队列、播放位置和播放设置
-- 通过前台媒体播放服务支持后台播放
+- 可选的锁屏显示
 
 ## 技术栈
 
@@ -31,25 +30,6 @@
 - Android Studio 内置 JDK 11
 - Android 8.1（API 27）或更高版本
 
-## 构建
-
-在项目根目录执行：
-
-```bash
-JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:assembleDebug
-```
-
-构建 Release 版本：
-
-```bash
-JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:assembleRelease
-```
-
-安装 Debug 版本到已连接的设备：
-
-```bash
-JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:installDebug
-```
 
 ## 使用方式
 
@@ -76,3 +56,7 @@ app/src/main/java/com/localaudio/player/
 - 音乐文件夹访问通过系统文件选择器授予，不需要申请传统存储权限。
 - Android 13 及以上版本需要通知权限，以显示播放通知。
 - 后台播放使用媒体播放类型的前台服务。
+
+## 许可证
+
+本项目采用 [MIT License](LICENSE) 开源。版权所有 © 2026 LocalAudio contributors。
