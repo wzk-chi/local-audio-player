@@ -71,11 +71,6 @@ class LibraryStore(context: Context) {
         cacheFile.writeText(json.toString())
     }
 
-    fun clear() {
-        preferences.edit().remove(KEY_FOLDERS).apply()
-        cacheFile.delete()
-    }
-
     private companion object {
         const val KEY_FOLDERS = "folders_json"
     }

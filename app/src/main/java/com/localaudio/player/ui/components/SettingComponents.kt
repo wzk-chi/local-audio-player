@@ -7,46 +7,66 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import com.localaudio.player.ui.util.durationLabel
 
 @Composable
 internal fun SettingCard(
     title: String,
-    subtitle: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        Column(
+            modifier = Modifier.padding(top = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+internal fun SettingItemCard(
+    icon: Int?,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            subtitle?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            icon?.let {
+                Icon(
+                    painter = painterResource(it),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
             Column(
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = if (icon == null) Modifier.fillMaxWidth() else Modifier.padding(start = 14.dp).weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 content()
@@ -58,22 +78,19 @@ internal fun SettingCard(
 @Composable
 private fun SettingDivider() {
     HorizontalDivider(
-        modifier = Modifier.padding(vertical = 2.dp),
-        color = MaterialTheme.colorScheme.outlineVariant,
+        modifier = Modifier.padding(vertical = 3.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
     )
 }
 
 @Composable
-internal fun ChoiceRow(title: String, value: String, subtitle: String, onClick: () -> Unit, showDivider: Boolean) {
+internal fun ChoiceRow(title: String, value: String, onClick: () -> Unit, showDivider: Boolean) {
     Column {
         Row(
             modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Text(value, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
         }
@@ -82,32 +99,14 @@ internal fun ChoiceRow(title: String, value: String, subtitle: String, onClick: 
 }
 
 @Composable
-internal fun SwitchRow(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, showDivider: Boolean = true) {
+internal fun SwitchRow(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, showDivider: Boolean = true) {
     Column {
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             Switch(checked = checked, onCheckedChange = onCheckedChange)
-        }
-        if (showDivider) SettingDivider()
-    }
-}
-
-@Composable
-internal fun DurationSettingRow(duration: Long, onEdit: () -> Unit, onDelete: () -> Unit, canDelete: Boolean, showDivider: Boolean) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(durationLabel(duration), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-            TextButton(onClick = onEdit) { Text("编辑") }
-            TextButton(onClick = onDelete, enabled = canDelete) { Text("删除") }
         }
         if (showDivider) SettingDivider()
     }

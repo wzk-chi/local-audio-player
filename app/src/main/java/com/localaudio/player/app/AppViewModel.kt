@@ -81,6 +81,7 @@ class AppViewModel(
         when (event) {
             is AppEvent.SelectScreen -> navigation.update { it.copy(screen = event.screen) }
             AppEvent.Back -> goBack()
+            AppEvent.LocateCurrent -> locateCurrent()
             is AppEvent.OpenDirectory -> updateHomeLocation(event.location)
             is AppEvent.PlayAudio -> playAudio(event.item)
             AppEvent.AddFolder -> _effects.trySend(AppEffect.OpenFolderPicker)
@@ -92,7 +93,6 @@ class AppViewModel(
             is AppEvent.RescanFolder -> libraryRepository.rescan(event.uri)
             is AppEvent.RemoveFolder -> libraryRepository.removeFolder(event.uri)
             AppEvent.RescanAll -> libraryRepository.rescanAll()
-            AppEvent.ClearFolders -> libraryRepository.clearAll()
             AppEvent.EnsureNotificationPermission -> ensureNotificationPermission()
             AppEvent.NotificationPermissionRequestLaunched -> settingsRepository.markNotificationRequested()
         }
@@ -115,6 +115,20 @@ class AppViewModel(
         settingsRepository.updateSavedHomeLocation(location)
     }
 
+    private fun locateCurrent() {
+        playbackConnection.state.value.currentItem?.let { item ->
+            val name = item.relativePath.substringAfterLast('/').ifEmpty { item.folderName }
+            updateHomeLocation(
+                FolderLocation(
+                    folderUri = item.folderUri,
+                    rootName = item.folderName,
+                    relativePath = item.relativePath,
+                    name = name,
+                ),
+            )
+        }
+    }
+
     private fun playAudio(item: AudioItem) {
         homeRowsBuilder.queueFor(libraryRepository.state.value.items, item)?.let { (queue, index) ->
             playbackConnection.dispatch(
@@ -128,7 +142,6 @@ class AppViewModel(
             is SettingChange.SetThemeMode -> settingsRepository.updateThemeMode(change.value)
             is SettingChange.SetHomeHeaderMode -> settingsRepository.updateHomeHeaderMode(change.value)
             is SettingChange.SetShowWhenLocked -> settingsRepository.updateShowWhenLocked(change.value)
-            is SettingChange.SetShowStaticArtwork -> settingsRepository.updateShowStaticArtwork(change.value)
             is SettingChange.SetTimerEnabled -> settingsRepository.updateTimerEnabled(change.value)
             is SettingChange.SetTimerDuration -> settingsRepository.updateTimerDurationMs(change.valueMs)
             is SettingChange.SetWaitForCurrentEnd -> settingsRepository.updateWaitForCurrentEnd(change.value)
@@ -136,15 +149,6 @@ class AppViewModel(
             is SettingChange.AddTimerDuration -> {
                 val settings = settingsRepository.state.value
                 settingsRepository.updateTimerDurationOptions(settings.timerDurationOptionsMs + change.valueMs)
-            }
-
-            is SettingChange.EditTimerDuration -> {
-                val settings = settingsRepository.state.value
-                val selected = change.newValueMs.takeIf { settings.timerDurationMs == change.oldValueMs }
-                settingsRepository.updateTimerDurationOptions(
-                    settings.timerDurationOptionsMs.filterNot { it == change.oldValueMs } + change.newValueMs,
-                    selected,
-                )
             }
 
             is SettingChange.DeleteTimerDuration -> {

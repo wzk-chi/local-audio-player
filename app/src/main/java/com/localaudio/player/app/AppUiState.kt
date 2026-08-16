@@ -18,8 +18,7 @@ sealed interface AppDialog {
     data object Timer : AppDialog
     data object Theme : AppDialog
     data object Header : AppDialog
-    data object ClearFolders : AppDialog
-    data class EditDuration(val existingMs: Long?) : AppDialog
+    data object AddDuration : AppDialog
 }
 
 data class AppUiState(
@@ -37,19 +36,18 @@ sealed interface SettingChange {
     data class SetThemeMode(val value: ThemeMode) : SettingChange
     data class SetHomeHeaderMode(val value: HomeHeaderMode) : SettingChange
     data class SetShowWhenLocked(val value: Boolean) : SettingChange
-    data class SetShowStaticArtwork(val value: Boolean) : SettingChange
     data class SetTimerEnabled(val value: Boolean) : SettingChange
     data class SetTimerDuration(val valueMs: Long) : SettingChange
     data class SetWaitForCurrentEnd(val value: Boolean) : SettingChange
     data class SetSeekStep(val valueMs: Long) : SettingChange
     data class AddTimerDuration(val valueMs: Long) : SettingChange
-    data class EditTimerDuration(val oldValueMs: Long, val newValueMs: Long) : SettingChange
     data class DeleteTimerDuration(val valueMs: Long) : SettingChange
 }
 
 sealed interface AppEvent {
     data class SelectScreen(val screen: AppScreen) : AppEvent
     data object Back : AppEvent
+    data object LocateCurrent : AppEvent
     data class OpenDirectory(val location: FolderLocation) : AppEvent
     data class PlayAudio(val item: AudioItem) : AppEvent
     data object AddFolder : AppEvent
@@ -61,7 +59,6 @@ sealed interface AppEvent {
     data class RescanFolder(val uri: String) : AppEvent
     data class RemoveFolder(val uri: String) : AppEvent
     data object RescanAll : AppEvent
-    data object ClearFolders : AppEvent
     data object EnsureNotificationPermission : AppEvent
     data object NotificationPermissionRequestLaunched : AppEvent
 }

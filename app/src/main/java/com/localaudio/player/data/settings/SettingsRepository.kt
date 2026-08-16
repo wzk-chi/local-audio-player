@@ -25,9 +25,6 @@ class SettingsRepository(context: Context) {
     fun updateShowWhenLocked(value: Boolean) =
         updateBoolean(KEY_SHOW_WHEN_LOCKED, value) { it.copy(showWhenLocked = value) }
 
-    fun updateShowStaticArtwork(value: Boolean) =
-        updateBoolean(KEY_SHOW_STATIC_ARTWORK, value) { it.copy(showStaticArtwork = value) }
-
     fun updateTimerEnabled(value: Boolean) =
         updateBoolean(KEY_TIMER_ENABLED, value) { it.copy(timerEnabled = value) }
 
@@ -141,7 +138,6 @@ class SettingsRepository(context: Context) {
                 HomeHeaderMode.FIXED,
             ),
             showWhenLocked = preferences.getBoolean(KEY_SHOW_WHEN_LOCKED, false),
-            showStaticArtwork = preferences.getBoolean(KEY_SHOW_STATIC_ARTWORK, true),
             timerEnabled = preferences.getBoolean(KEY_TIMER_ENABLED, true),
             timerDurationMs = duration,
             timerDurationOptionsMs = options,
@@ -171,7 +167,6 @@ class SettingsRepository(context: Context) {
         const val KEY_THEME = "theme"
         const val KEY_HEADER = "header"
         const val KEY_SHOW_WHEN_LOCKED = "show_when_locked"
-        const val KEY_SHOW_STATIC_ARTWORK = "show_static_artwork"
         const val KEY_TIMER_ENABLED = "timer_enabled"
         const val KEY_TIMER_DURATION = "timer_duration"
         const val KEY_TIMER_OPTIONS = "timer_options"

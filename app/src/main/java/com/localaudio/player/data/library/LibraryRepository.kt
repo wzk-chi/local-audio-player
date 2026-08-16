@@ -79,14 +79,6 @@ class LibraryRepository(
 
     fun rescanAll() = _state.value.folders.forEach(::startScan)
 
-    fun clearAll() {
-        _state.value.folders.forEach { folder ->
-            clearFolderResources(folder.uri)
-        }
-        _state.value = LibraryState()
-        store.clear()
-    }
-
     private fun startScan(folder: FolderItem) {
         jobs[folder.uri]?.cancel(true)
         val scanToken = ++nextScanToken

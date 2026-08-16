@@ -3,7 +3,6 @@ package com.localaudio.player.ui.player
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -16,11 +15,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,19 +43,15 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.localaudio.player.R
@@ -53,16 +59,15 @@ import com.localaudio.player.data.settings.REPEAT_ALL
 import com.localaudio.player.data.settings.REPEAT_ONE
 import com.localaudio.player.playback.PlaybackState
 import com.localaudio.player.ui.components.PlayerAction
-import com.localaudio.player.ui.components.PlayerIconButton
 import com.localaudio.player.ui.util.formatTime
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PlayerScreen(
     state: PlaybackState,
     seekStepMs: Long,
-    showStaticArtwork: Boolean,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -85,38 +90,70 @@ fun PlayerScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(modifier = Modifier.weight(1f))
-        SwipeableArtworkTitle(
+        CoverPlaceholder(modifier = Modifier.size(220.dp))
+        Spacer(modifier = Modifier.height(14.dp))
+        SwipeableTrackTitle(
             title = state.currentItem?.title ?: "还没有播放内容\n请到首页选择歌曲",
-            showStaticArtwork = showStaticArtwork,
             onNext = onNext,
             onPrevious = onPrevious,
         )
         Spacer(modifier = Modifier.height(18.dp))
-        Slider(
-            value = sliderValue.coerceIn(0f, max),
-            onValueChange = { seeking = true; sliderValue = it },
-            onValueChangeFinished = {
-                if (seeking) {
-                    seeking = false
-                    onSeekTo(sliderValue.toLong())
-                }
-            },
-            valueRange = 0f..max,
-            enabled = state.currentItem != null,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        Box(
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            LinearWavyProgressIndicator(
+                progress = { (sliderValue / max).coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().clearAndSetSemantics { },
+            )
+            Slider(
+                value = sliderValue.coerceIn(0f, max),
+                onValueChange = { seeking = true; sliderValue = it },
+                onValueChangeFinished = {
+                    if (seeking) {
+                        seeking = false
+                        onSeekTo(sliderValue.toLong())
+                    }
+                },
+                valueRange = 0f..max,
+                enabled = state.currentItem != null,
+                colors = SliderDefaults.colors(
+                    thumbColor = Color.Transparent,
+                    activeTrackColor = Color.Transparent,
+                    inactiveTrackColor = Color.Transparent,
+                    activeTickColor = Color.Transparent,
+                    inactiveTickColor = Color.Transparent,
+                    disabledThumbColor = Color.Transparent,
+                    disabledActiveTrackColor = Color.Transparent,
+                    disabledInactiveTrackColor = Color.Transparent,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(formatTime(if (seeking) sliderValue.toLong() else state.positionMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(formatTime(state.durationMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
-            PlayerIconButton(R.drawable.ic_rewind, "快退", Modifier.size(52.dp)) { onSeekBy(-seekStepMs) }
-            PlayerIconButton(R.drawable.ic_prev, "上一曲", Modifier.size(52.dp)) { onPrevious() }
-            FilledIconButton(onClick = onPlayPause, modifier = Modifier.size(68.dp), enabled = state.currentItem != null) {
-                Icon(painterResource(if (state.isPlaying) R.drawable.ic_pause else R.drawable.ic_play), contentDescription = if (state.isPlaying) "暂停" else "播放", modifier = Modifier.size(30.dp))
+            IconButton(onClick = { onSeekBy(-seekStepMs) }, modifier = Modifier.size(52.dp)) {
+                Icon(Icons.Filled.FastRewind, contentDescription = "快退")
             }
-            PlayerIconButton(R.drawable.ic_next, "下一曲", Modifier.size(52.dp)) { onNext() }
-            PlayerIconButton(R.drawable.ic_forward, "快进", Modifier.size(52.dp)) { onSeekBy(seekStepMs) }
+            IconButton(onClick = onPrevious, modifier = Modifier.size(52.dp)) {
+                Icon(Icons.Filled.SkipPrevious, contentDescription = "上一曲")
+            }
+            FilledIconButton(onClick = onPlayPause, modifier = Modifier.size(68.dp), enabled = state.currentItem != null) {
+                Icon(
+                    imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (state.isPlaying) "暂停" else "播放",
+                    modifier = Modifier.size(30.dp),
+                )
+            }
+            IconButton(onClick = onNext, modifier = Modifier.size(52.dp)) {
+                Icon(Icons.Filled.SkipNext, contentDescription = "下一曲")
+            }
+            IconButton(onClick = { onSeekBy(seekStepMs) }, modifier = Modifier.size(52.dp)) {
+                Icon(Icons.Filled.FastForward, contentDescription = "快进")
+            }
         }
         Spacer(modifier = Modifier.height(10.dp))
         Row(
@@ -136,9 +173,8 @@ fun PlayerScreen(
 }
 
 @Composable
-private fun SwipeableArtworkTitle(
+private fun SwipeableTrackTitle(
     title: String,
-    showStaticArtwork: Boolean,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
 ) {
@@ -163,6 +199,7 @@ private fun SwipeableArtworkTitle(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .height(120.dp)
             .clipToBounds()
             .onSizeChanged { contentWidth = it.width.toFloat() }
             .pointerInput(maxOffset) {
@@ -216,6 +253,7 @@ private fun SwipeableArtworkTitle(
                     }
                 }
             },
+        contentAlignment = Alignment.Center,
     ) {
         Column(
             modifier = Modifier
@@ -225,56 +263,39 @@ private fun SwipeableArtworkTitle(
                 },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (showStaticArtwork) {
-                AlbumArtPlaceholder()
-                Spacer(modifier = Modifier.height(20.dp))
-            }
             Text(
                 text = displayedTitle,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                 style = MaterialTheme.typography.headlineSmall,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 3,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
         }
     }
 }
 
 @Composable
-private fun AlbumArtPlaceholder() {
-    val colors = MaterialTheme.colorScheme
-    Box(
-        modifier = Modifier
-            .size(300.dp)
-            .clip(RoundedCornerShape(28.dp))
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        colors.primaryContainer,
-                        colors.secondaryContainer,
-                        colors.tertiaryContainer,
-                    ),
-                ),
+private fun CoverPlaceholder(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.primaryContainer,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_music_note),
+                contentDescription = null,
+                modifier = Modifier.size(88.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
             )
-            .drawBehind {
-                val dimension = size.minDimension
-                drawCircle(
-                    color = colors.onSurface.copy(alpha = 0.08f),
-                    radius = dimension * 0.34f,
-                    center = Offset(size.width * 0.72f, size.height * 0.28f),
-                    style = Stroke(width = 2.dp.toPx()),
-                )
-                drawCircle(
-                    color = colors.onSurface.copy(alpha = 0.06f),
-                    radius = dimension * 0.22f,
-                    center = Offset(size.width * 0.24f, size.height * 0.74f),
-                )
-            }
-            .drawWithContent {
-                drawContent()
-                drawRect(colors.scrim.copy(alpha = 0.18f))
-            },
-    )
+        }
+    }
 }
 
 private fun playModeLabel(state: PlaybackState): String = when {

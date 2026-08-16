@@ -114,26 +114,9 @@ internal fun AppDialogs(
             },
             onDismiss = { onEvent(AppEvent.DismissDialog) },
         )
-        AppDialog.ClearFolders -> AlertDialog(
-            onDismissRequest = { onEvent(AppEvent.DismissDialog) },
-            title = { Text("清除所有文件夹？") },
-            text = { Text("将移除全部文件夹并释放访问权限。") },
-            dismissButton = { TextButton(onClick = { onEvent(AppEvent.DismissDialog) }) { Text("取消") } },
-            confirmButton = {
-                TextButton(onClick = {
-                    onEvent(AppEvent.ClearFolders)
-                    onEvent(AppEvent.DismissDialog)
-                }) { Text("清除", color = MaterialTheme.colorScheme.error) }
-            },
-        )
-        is AppDialog.EditDuration -> DurationDialog(
-            existingMs = current.existingMs,
+        AppDialog.AddDuration -> AddDurationDialog(
             onSave = { value ->
-                if (current.existingMs == null) {
-                    onEvent(AppEvent.UpdateSetting(SettingChange.AddTimerDuration(value)))
-                } else {
-                    onEvent(AppEvent.UpdateSetting(SettingChange.EditTimerDuration(current.existingMs, value)))
-                }
+                onEvent(AppEvent.UpdateSetting(SettingChange.AddTimerDuration(value)))
                 onEvent(AppEvent.DismissDialog)
             },
             onDismiss = { onEvent(AppEvent.DismissDialog) },
@@ -167,8 +150,8 @@ private fun ModeDialog(state: PlaybackState, onSelect: (Int, Boolean) -> Unit, o
 private fun TimerDialog(state: PlaybackState, settings: AppSettings, onSetEnabled: (Boolean) -> Unit, onSetWaitForEnd: (Boolean) -> Unit, onSelectDuration: (Long) -> Unit, onStop: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(onDismissRequest = onDismiss, title = { Text("定时暂停") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            SwitchRow("自动定时", "手动开始播放时开启，自动切歌不会触发", settings.timerEnabled, onSetEnabled, showDivider = true)
-            SwitchRow("播放完当前音频后暂停", "定时到期后等待当前音频结束", settings.waitForCurrentEnd, onSetWaitForEnd, showDivider = false)
+            SwitchRow("自动定时", settings.timerEnabled, onSetEnabled, showDivider = true)
+            SwitchRow("播放完当前音频后暂停", settings.waitForCurrentEnd, onSetWaitForEnd, showDivider = false)
             Text("定时时长", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
             settings.timerDurationOptionsMs.forEach { duration ->
                 OutlinedButton(onClick = { onSelectDuration(duration) }, modifier = Modifier.fillMaxWidth()) { Text(if (duration == settings.timerDurationMs) "✓ ${durationLabel(duration)}" else durationLabel(duration)) }
@@ -193,9 +176,9 @@ private fun ChoiceDialog(title: String, options: List<String>, selected: Int, on
 }
 
 @Composable
-private fun DurationDialog(existingMs: Long?, onSave: (Long) -> Unit, onDismiss: () -> Unit) {
-    var text by remember(existingMs) { mutableStateOf(existingMs?.let { (it / 60_000L).toString() } ?: "") }
-    AlertDialog(onDismissRequest = onDismiss, title = { Text(if (existingMs == null) "添加定时长度" else "编辑定时长度") }, text = {
+private fun AddDurationDialog(onSave: (Long) -> Unit, onDismiss: () -> Unit) {
+    var text by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("添加定时长度") }, text = {
         OutlinedTextField(value = text, onValueChange = { text = it.filter(Char::isDigit) }, singleLine = true, label = { Text("分钟") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
     }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }, confirmButton = { TextButton(onClick = { text.toLongOrNull()?.takeIf { it > 0 }?.let { onSave(it * 60_000L) } }) { Text("保存") } })
 }

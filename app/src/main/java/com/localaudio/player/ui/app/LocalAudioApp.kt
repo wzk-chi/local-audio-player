@@ -4,12 +4,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -56,6 +60,7 @@ fun LocalAudioApp(
                         hasLibrary = state.hasLibrary,
                         headerMode = state.settings.homeHeaderMode,
                         onBack = { onEvent(AppEvent.Back) },
+                        onLocateCurrent = { onEvent(AppEvent.LocateCurrent) },
                         onDirectoryClick = { onEvent(AppEvent.OpenDirectory(it)) },
                         onAudioClick = { onEvent(AppEvent.PlayAudio(it)) },
                         onAddFolder = { onEvent(AppEvent.AddFolder) },
@@ -64,7 +69,6 @@ fun LocalAudioApp(
                     AppScreen.PLAYER -> PlayerScreen(
                         state = state.playback,
                         seekStepMs = state.settings.seekStepMs,
-                        showStaticArtwork = state.settings.showStaticArtwork,
                         onPlayPause = togglePlayback,
                         onNext = { dispatchPlayback(PlaybackCommand.Next) },
                         onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
@@ -82,17 +86,15 @@ fun LocalAudioApp(
                         onThemeClick = { onEvent(AppEvent.ShowDialog(AppDialog.Theme)) },
                         onHeaderClick = { onEvent(AppEvent.ShowDialog(AppDialog.Header)) },
                         onSetShowWhenLocked = { onEvent(AppEvent.UpdateSetting(SettingChange.SetShowWhenLocked(it))) },
-                        onSetShowStaticArtwork = { onEvent(AppEvent.UpdateSetting(SettingChange.SetShowStaticArtwork(it))) },
                         onSetTimerEnabled = { onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerEnabled(it))) },
                         onSetWaitForCurrentEnd = { onEvent(AppEvent.UpdateSetting(SettingChange.SetWaitForCurrentEnd(it))) },
                         onSetSeekStep = { onEvent(AppEvent.UpdateSetting(SettingChange.SetSeekStep(it))) },
-                        onEditDuration = { onEvent(AppEvent.ShowDialog(AppDialog.EditDuration(it))) },
+                        onAddDuration = { onEvent(AppEvent.ShowDialog(AppDialog.AddDuration)) },
                         onDeleteTimerDuration = { onEvent(AppEvent.UpdateSetting(SettingChange.DeleteTimerDuration(it))) },
                         onAddFolder = { onEvent(AppEvent.AddFolder) },
                         onRescanFolder = { onEvent(AppEvent.RescanFolder(it)) },
                         onRemoveFolder = { onEvent(AppEvent.RemoveFolder(it)) },
                         onRescanAll = { onEvent(AppEvent.RescanAll) },
-                        onClearFolders = { onEvent(AppEvent.ShowDialog(AppDialog.ClearFolders)) },
                     )
                 }
             }
@@ -115,24 +117,39 @@ fun LocalAudioApp(
 
 @Composable
 private fun BottomNavigation(screen: AppScreen, onScreenSelected: (AppScreen) -> Unit) {
-    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+    val itemColors = NavigationBarItemDefaults.colors(
+        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        selectedTextColor = MaterialTheme.colorScheme.onSurface,
+        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    NavigationBar(
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp).clip(RoundedCornerShape(24.dp)),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 0.dp,
+    ) {
         NavigationBarItem(
             selected = screen == AppScreen.HOME,
             onClick = { onScreenSelected(AppScreen.HOME) },
             icon = { AppIcon(R.drawable.ic_home, "首页") },
             label = { Text("首页") },
+            colors = itemColors,
         )
         NavigationBarItem(
             selected = screen == AppScreen.PLAYER,
             onClick = { onScreenSelected(AppScreen.PLAYER) },
             icon = { AppIcon(R.drawable.ic_play, "播放") },
             label = { Text("播放") },
+            colors = itemColors,
         )
         NavigationBarItem(
             selected = screen == AppScreen.SETTINGS,
             onClick = { onScreenSelected(AppScreen.SETTINGS) },
             icon = { AppIcon(R.drawable.ic_settings, "设置") },
             label = { Text("设置") },
+            colors = itemColors,
         )
     }
 }

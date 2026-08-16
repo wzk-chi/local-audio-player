@@ -20,7 +20,6 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val homeHeaderMode: HomeHeaderMode = HomeHeaderMode.FIXED,
     val showWhenLocked: Boolean = false,
-    val showStaticArtwork: Boolean = true,
     val timerEnabled: Boolean = true,
     val timerDurationMs: Long = 30 * 60_000L,
     val timerDurationOptionsMs: List<Long> = DEFAULT_TIMER_DURATIONS_MS,
