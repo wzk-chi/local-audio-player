@@ -1,6 +1,7 @@
 package com.localaudio.player.ui.player
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -36,6 +37,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.WavyProgressIndicatorDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -86,6 +88,11 @@ fun PlayerScreen(
         if (!seeking) sliderValue = state.positionMs.toFloat()
     }
     val max = state.durationMs.coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toFloat()
+    val waveAmplitude by animateFloatAsState(
+        targetValue = if (state.isPlaying) 1f else 0f,
+        animationSpec = tween(durationMillis = 500),
+        label = "waveAmplitude",
+    )
 
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 8.dp),
@@ -104,8 +111,17 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxWidth().height(48.dp),
             contentAlignment = Alignment.Center,
         ) {
+            val progress = { (sliderValue / max).coerceIn(0f, 1f) }
             LinearWavyProgressIndicator(
-                progress = { (sliderValue / max).coerceIn(0f, 1f) },
+                progress = progress,
+                amplitude = { value ->
+                    waveAmplitude * WavyProgressIndicatorDefaults.indicatorAmplitude(value)
+                },
+                waveSpeed = if (state.isPlaying) {
+                    WavyProgressIndicatorDefaults.LinearDeterminateWavelength
+                } else {
+                    0.dp
+                },
                 modifier = Modifier.fillMaxWidth().clearAndSetSemantics { },
             )
             Slider(
