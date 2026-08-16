@@ -4,6 +4,17 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+val releaseStoreFile = providers.gradleProperty("localAudioStoreFile").orNull
+val releaseStorePassword = providers.gradleProperty("localAudioStorePassword").orNull
+val releaseKeyAlias = providers.gradleProperty("localAudioKeyAlias").orNull
+val releaseKeyPassword = providers.gradleProperty("localAudioKeyPassword").orNull
+val releaseSigningConfigured = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { it != null }
+
 android {
     namespace = "com.localaudio.player"
     compileSdk = 36
@@ -16,10 +27,24 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = file(requireNotNull(releaseStoreFile))
+                storePassword = requireNotNull(releaseStorePassword)
+                keyAlias = requireNotNull(releaseKeyAlias)
+                keyPassword = requireNotNull(releaseKeyPassword)
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
