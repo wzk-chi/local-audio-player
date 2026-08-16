@@ -90,7 +90,7 @@ fun PlayerScreen(
     val max = state.durationMs.coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toFloat()
     val waveAmplitude by animateFloatAsState(
         targetValue = if (state.isPlaying) 1f else 0f,
-        animationSpec = tween(durationMillis = 500),
+        animationSpec = tween(durationMillis = 1_000),
         label = "waveAmplitude",
     )
 
