@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,13 +20,21 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -47,13 +54,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.localaudio.player.R
 import com.localaudio.player.app.HomeRow
 import com.localaudio.player.data.model.AudioItem
 import com.localaudio.player.data.model.FolderLocation
@@ -228,6 +233,7 @@ private fun calculateScrollbarMetrics(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeHeader(
     location: FolderLocation?,
@@ -235,65 +241,51 @@ private fun HomeHeader(
     onBack: () -> Unit,
     onLocateCurrent: () -> Unit,
 ) {
-    Surface(color = MaterialTheme.colorScheme.background) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 16.dp, top = 10.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (location != null) {
-                IconButton(onClick = onBack) {
-                    Icon(painterResource(R.drawable.ic_back), contentDescription = "返回上一层")
-                }
-            } else {
-                Spacer(modifier = Modifier.size(40.dp))
-            }
+    TopAppBar(
+        title = {
             Text(
                 text = location?.name ?: "首页",
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        },
+        navigationIcon = {
+            if (location != null) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回上一层")
+                }
+            }
+        },
+        actions = {
             IconButton(
                 onClick = onLocateCurrent,
                 enabled = playingKey != null,
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_my_location),
-                    contentDescription = "定位当前播放",
-                )
+                Icon(Icons.Filled.MyLocation, contentDescription = "定位当前播放")
             }
-        }
-    }
+        },
+    )
 }
 
 @Composable
 private fun DirectoryRow(location: FolderLocation, onClick: (FolderLocation) -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).clickable { onClick(location) },
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 1.dp,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_folder),
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(modifier = Modifier.size(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(location.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-                Text("文件夹", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text("›", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
+    ListItem(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.large)
+            .clickable { onClick(location) },
+        headlineContent = { Text(location.name) },
+        supportingContent = { Text("文件夹") },
+        leadingContent = {
+            Icon(Icons.Filled.Folder, contentDescription = null)
+        },
+        trailingContent = {
+            Icon(Icons.Filled.ChevronRight, contentDescription = null)
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+    )
 }
 
 @Composable
@@ -302,37 +294,40 @@ private fun AudioRow(item: AudioItem, playingKey: String?, onClick: (AudioItem) 
     val titleColor = if (active) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
     val durationColor = if (active) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
 
-    Surface(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { onClick(item) },
-        shape = RoundedCornerShape(16.dp),
-        color = if (active) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-        tonalElevation = if (active) 1.dp else 0.dp,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
+    ListItem(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .clickable { onClick(item) },
+        headlineContent = {
+            Text(
+                text = item.title,
+                color = titleColor,
+                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Schedule,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    tint = durationColor,
+                )
                 Text(
-                    text = item.title,
-                    color = titleColor,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                    formatTime(item.durationMs),
+                    modifier = Modifier.padding(start = 4.dp),
+                    color = durationColor,
+                    style = MaterialTheme.typography.labelMedium,
                 )
             }
-            Spacer(modifier = Modifier.size(12.dp))
-            Icon(
-                painter = painterResource(R.drawable.ic_schedule),
-                contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                tint = durationColor,
-            )
-            Spacer(modifier = Modifier.size(4.dp))
-            Text(formatTime(item.durationMs), style = MaterialTheme.typography.labelMedium, color = durationColor)
-        }
-    }
+        },
+        colors = ListItemDefaults.colors(
+            containerColor = if (active) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+        ),
+    )
 }
 
 @Composable

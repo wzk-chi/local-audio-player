@@ -38,7 +38,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,9 +46,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Refresh
-import com.localaudio.player.R
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Timer
 import com.localaudio.player.data.model.FolderItem
 import com.localaudio.player.data.model.ScanState
 import com.localaudio.player.data.settings.AppSettings
@@ -101,7 +105,7 @@ fun SettingsScreen(
                     modifier = Modifier.clickable(onClick = onThemeClick),
                     leadingContent = {
                         Icon(
-                            painter = painterResource(R.drawable.ic_settings),
+                            imageVector = Icons.Filled.Settings,
                             contentDescription = null,
                             modifier = Modifier.size(28.dp),
                             tint = MaterialTheme.colorScheme.primary,
@@ -127,7 +131,7 @@ fun SettingsScreen(
                     modifier = Modifier.clickable(onClick = onHeaderClick),
                     leadingContent = {
                         Icon(
-                            painter = painterResource(R.drawable.ic_home),
+                            imageVector = Icons.Filled.Home,
                             contentDescription = null,
                             modifier = Modifier.size(28.dp),
                             tint = MaterialTheme.colorScheme.primary,
@@ -152,7 +156,7 @@ fun SettingsScreen(
                 ListItem(
                     leadingContent = {
                         Icon(
-                            painter = painterResource(R.drawable.ic_schedule),
+                            imageVector = Icons.Filled.Schedule,
                             contentDescription = null,
                             modifier = Modifier.size(28.dp),
                             tint = MaterialTheme.colorScheme.primary,
@@ -168,7 +172,7 @@ fun SettingsScreen(
         }
 
         SettingCard("播放") {
-            SettingItemCard(R.drawable.ic_forward) {
+            SettingItemCard(Icons.Filled.FastForward) {
                 Text(
                     "快进 / 快退跨度",
                     style = MaterialTheme.typography.titleSmall,
@@ -205,7 +209,7 @@ fun SettingsScreen(
                 ListItem(
                     leadingContent = {
                         Icon(
-                            painter = painterResource(R.drawable.ic_timer),
+                            imageVector = Icons.Filled.Timer,
                             contentDescription = null,
                             modifier = Modifier.size(28.dp),
                             tint = MaterialTheme.colorScheme.primary,
@@ -227,7 +231,7 @@ fun SettingsScreen(
                 ListItem(
                     leadingContent = {
                         Icon(
-                            painter = painterResource(R.drawable.ic_pause),
+                            imageVector = Icons.Filled.Pause,
                             contentDescription = null,
                             modifier = Modifier.size(28.dp),
                             tint = MaterialTheme.colorScheme.primary,
@@ -257,7 +261,7 @@ fun SettingsScreen(
                         },
                         leadingContent = {
                             Icon(
-                                painter = painterResource(R.drawable.ic_timer),
+                                imageVector = Icons.Filled.Timer,
                                 contentDescription = null,
                                 modifier = Modifier.size(28.dp),
                                 tint = MaterialTheme.colorScheme.primary,

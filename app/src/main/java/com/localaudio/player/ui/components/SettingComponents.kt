@@ -1,6 +1,5 @@
 package com.localaudio.player.ui.components
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -10,6 +9,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -18,7 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -44,7 +45,7 @@ internal fun SettingCard(
 
 @Composable
 internal fun SettingItemCard(
-    icon: Int?,
+    icon: ImageVector?,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
@@ -59,7 +60,7 @@ internal fun SettingItemCard(
         ) {
             icon?.let {
                 Icon(
-                    painter = painterResource(it),
+                    imageVector = it,
                     contentDescription = null,
                     modifier = Modifier.size(28.dp),
                     tint = MaterialTheme.colorScheme.primary,
@@ -84,30 +85,13 @@ private fun SettingDivider() {
 }
 
 @Composable
-internal fun ChoiceRow(title: String, value: String, onClick: () -> Unit, showDivider: Boolean) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            Text(value, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Text("›", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
-        }
-        if (showDivider) SettingDivider()
-    }
-}
-
-@Composable
 internal fun SwitchRow(title: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit, showDivider: Boolean = true) {
     Column {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
-        }
+        ListItem(
+            headlineContent = { Text(title) },
+            trailingContent = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
+            colors = ListItemDefaults.colors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
+        )
         if (showDivider) SettingDivider()
     }
 }

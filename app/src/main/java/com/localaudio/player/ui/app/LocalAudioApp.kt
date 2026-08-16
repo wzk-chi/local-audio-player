@@ -5,10 +5,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -18,9 +19,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import com.localaudio.player.R
 import com.localaudio.player.app.AppDialog
 import com.localaudio.player.app.AppEvent
 import com.localaudio.player.app.AppScreen
@@ -126,35 +126,30 @@ private fun BottomNavigation(screen: AppScreen, onScreenSelected: (AppScreen) ->
     )
 
     NavigationBar(
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp).clip(RoundedCornerShape(24.dp)),
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp).clip(MaterialTheme.shapes.large),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 0.dp,
     ) {
         NavigationBarItem(
             selected = screen == AppScreen.HOME,
             onClick = { onScreenSelected(AppScreen.HOME) },
-            icon = { AppIcon(R.drawable.ic_home, "首页") },
+            icon = { Icon(Icons.Filled.Home, contentDescription = "首页") },
             label = { Text("首页") },
             colors = itemColors,
         )
         NavigationBarItem(
             selected = screen == AppScreen.PLAYER,
             onClick = { onScreenSelected(AppScreen.PLAYER) },
-            icon = { AppIcon(R.drawable.ic_play, "播放") },
+            icon = { Icon(Icons.Filled.PlayArrow, contentDescription = "播放") },
             label = { Text("播放") },
             colors = itemColors,
         )
         NavigationBarItem(
             selected = screen == AppScreen.SETTINGS,
             onClick = { onScreenSelected(AppScreen.SETTINGS) },
-            icon = { AppIcon(R.drawable.ic_settings, "设置") },
+            icon = { Icon(Icons.Filled.Settings, contentDescription = "设置") },
             label = { Text("设置") },
             colors = itemColors,
         )
     }
-}
-
-@Composable
-private fun AppIcon(resource: Int, description: String) {
-    Icon(painterResource(resource), contentDescription = description, modifier = Modifier.size(22.dp))
 }

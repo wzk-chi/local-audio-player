@@ -5,15 +5,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -23,9 +22,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -130,10 +128,20 @@ private fun QueueDialog(state: PlaybackState, onSelect: (Int) -> Unit, onDismiss
     AlertDialog(onDismissRequest = onDismiss, title = { Text("播放列表") }, text = {
         LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
             items(state.queue) { item ->
-                Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onSelect(state.queue.indexOf(item)) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = state.queue.indexOf(item) == state.currentIndex, onClick = { onSelect(state.queue.indexOf(item)) })
-                    Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
+                val index = state.queue.indexOf(item)
+                ListItem(
+                    modifier = Modifier.fillMaxWidth().clickable { onSelect(index) },
+                    leadingContent = {
+                        RadioButton(
+                            selected = index == state.currentIndex,
+                            onClick = { onSelect(index) },
+                        )
+                    },
+                    headlineContent = {
+                        Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                )
             }
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } })
@@ -154,7 +162,17 @@ private fun TimerDialog(state: PlaybackState, settings: AppSettings, onSetEnable
             SwitchRow("播放完当前音频后暂停", settings.waitForCurrentEnd, onSetWaitForEnd, showDivider = false)
             Text("定时时长", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
             settings.timerDurationOptionsMs.forEach { duration ->
-                OutlinedButton(onClick = { onSelectDuration(duration) }, modifier = Modifier.fillMaxWidth()) { Text(if (duration == settings.timerDurationMs) "✓ ${durationLabel(duration)}" else durationLabel(duration)) }
+                ListItem(
+                    modifier = Modifier.fillMaxWidth().clickable { onSelectDuration(duration) },
+                    leadingContent = {
+                        RadioButton(
+                            selected = duration == settings.timerDurationMs,
+                            onClick = { onSelectDuration(duration) },
+                        )
+                    },
+                    headlineContent = { Text(durationLabel(duration)) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                )
             }
             if (state.timerActive) TextButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) { Text("关闭当前定时") }
         }
@@ -166,10 +184,17 @@ private fun ChoiceDialog(title: String, options: List<String>, selected: Int, on
     AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = {
         Column {
             options.forEachIndexed { index, option ->
-                Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { onSelect(index) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = selected == index, onClick = { onSelect(index) })
-                    Text(option)
-                }
+                ListItem(
+                    modifier = Modifier.fillMaxWidth().clickable { onSelect(index) },
+                    leadingContent = {
+                        RadioButton(
+                            selected = selected == index,
+                            onClick = { onSelect(index) },
+                        )
+                    },
+                    headlineContent = { Text(option) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                )
             }
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } })

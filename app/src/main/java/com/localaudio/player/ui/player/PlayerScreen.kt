@@ -16,12 +16,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -50,11 +54,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.localaudio.player.R
 import com.localaudio.player.data.settings.REPEAT_ALL
 import com.localaudio.player.data.settings.REPEAT_ONE
 import com.localaudio.player.playback.PlaybackState
@@ -161,13 +163,13 @@ fun PlayerScreen(
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             PlayerAction(
-                icon = R.drawable.ic_timer,
+                icon = Icons.Filled.Timer,
                 label = timerLabel(state),
                 onClick = onOpenTimer,
                 active = state.timerActive,
             )
-            PlayerAction(icon = R.drawable.ic_repeat, label = playModeLabel(state), onClick = onOpenMode)
-            PlayerAction(icon = R.drawable.ic_queue, label = "列表", onClick = onOpenQueue)
+            PlayerAction(icon = Icons.Filled.Repeat, label = playModeLabel(state), onClick = onOpenMode)
+            PlayerAction(icon = Icons.AutoMirrored.Filled.QueueMusic, label = "列表", onClick = onOpenQueue)
         }
     }
 }
@@ -289,7 +291,7 @@ private fun CoverPlaceholder(modifier: Modifier = Modifier) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                painter = painterResource(R.drawable.ic_music_note),
+                imageVector = Icons.Filled.MusicNote,
                 contentDescription = null,
                 modifier = Modifier.size(88.dp),
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
