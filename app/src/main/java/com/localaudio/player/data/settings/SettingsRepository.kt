@@ -145,7 +145,7 @@ class SettingsRepository(context: Context) {
             timerEnabled = preferences.getBoolean(KEY_TIMER_ENABLED, true),
             timerDurationMs = duration,
             timerDurationOptionsMs = options,
-            waitForCurrentEnd = preferences.getBoolean(KEY_WAIT_FOR_END, false),
+            waitForCurrentEnd = preferences.getBoolean(KEY_WAIT_FOR_END, true),
             seekStepMs = preferences.getLong(KEY_SEEK_STEP, 10_000L).coerceAtLeast(1_000L),
             repeatMode = preferences.getInt(KEY_REPEAT, REPEAT_OFF).coerceIn(0, 2),
             shuffleEnabled = preferences.getBoolean(KEY_SHUFFLE, false),

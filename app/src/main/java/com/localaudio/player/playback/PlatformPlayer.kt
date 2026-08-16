@@ -2,6 +2,8 @@ package com.localaudio.player.playback
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
@@ -18,8 +20,20 @@ sealed interface PlayerEvent {
 class PlatformPlayer(
     private val context: Context,
     private val onEvent: (PlayerEvent) -> Unit,
+    private val onAudioFocusLost: () -> Unit,
 ) {
     private val handler = Handler(Looper.getMainLooper())
+    private val audioManager = context.getSystemService(AudioManager::class.java)
+    private val audioAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+        .build()
+    private val audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+        .setAudioAttributes(audioAttributes)
+        .setOnAudioFocusChangeListener { change ->
+            if (change < 0 && isPlaying()) onAudioFocusLost()
+        }
+        .build()
     private var mediaPlayer: MediaPlayer? = null
     private var currentGeneration = 0L
     private var preparedGeneration: Long? = null
@@ -35,12 +49,7 @@ class PlatformPlayer(
         val generation = ++currentGeneration
         val player = MediaPlayer()
         mediaPlayer = player
-        player.setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                .build(),
-        )
+        player.setAudioAttributes(audioAttributes)
         player.setOnPreparedListener {
             if (mediaPlayer !== player || currentGeneration != generation) return@setOnPreparedListener
             preparedGeneration = generation
@@ -70,12 +79,16 @@ class PlatformPlayer(
         return generation
     }
 
-    fun play() {
-        if (isPrepared) mediaPlayer?.start()
+    fun play(): Boolean {
+        if (!isPrepared) return false
+        if (audioManager.requestAudioFocus(audioFocusRequest) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) return false
+        mediaPlayer?.start()
+        return true
     }
 
     fun pause() {
         if (isPrepared && mediaPlayer?.isPlaying == true) mediaPlayer?.pause()
+        abandonAudioFocus()
     }
 
     fun seekTo(positionMs: Long) {
@@ -89,6 +102,7 @@ class PlatformPlayer(
     fun isPlaying(): Boolean = isPrepared && mediaPlayer?.isPlaying == true
 
     fun release() {
+        abandonAudioFocus()
         preparedGeneration = null
         val player = mediaPlayer
         mediaPlayer = null
@@ -98,5 +112,9 @@ class PlatformPlayer(
             player.setOnErrorListener(null)
             player.release()
         }
+    }
+
+    private fun abandonAudioFocus() {
+        audioManager.abandonAudioFocusRequest(audioFocusRequest)
     }
 }

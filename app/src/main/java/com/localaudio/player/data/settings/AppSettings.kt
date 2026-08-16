@@ -24,7 +24,7 @@ data class AppSettings(
     val timerEnabled: Boolean = true,
     val timerDurationMs: Long = 30 * 60_000L,
     val timerDurationOptionsMs: List<Long> = DEFAULT_TIMER_DURATIONS_MS,
-    val waitForCurrentEnd: Boolean = false,
+    val waitForCurrentEnd: Boolean = true,
     val seekStepMs: Long = 10_000L,
     val repeatMode: Int = REPEAT_OFF,
     val shuffleEnabled: Boolean = false,

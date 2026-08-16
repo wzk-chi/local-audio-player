@@ -50,7 +50,13 @@ class PlaybackService : Service() {
             mainHandler = Handler(Looper.getMainLooper()),
             onPlaybackStarted = { startForeground(NOTIFICATION_ID, notification()) },
         )
-        coordinator.attachPlayer(PlatformPlayer(this, coordinator::onPlayerEvent))
+        coordinator.attachPlayer(
+            PlatformPlayer(
+                context = this,
+                onEvent = coordinator::onPlayerEvent,
+                onAudioFocusLost = { coordinator.dispatch(PlaybackCommand.Pause) },
+            ),
+        )
         createNotificationChannel()
         mediaSession = MediaSession(this, "LocalAudio")
         mediaSession.setCallback(object : MediaSession.Callback() {

@@ -128,7 +128,11 @@ class PlaybackCoordinator(
             loadCurrent()
             return
         }
-        currentPlayer.play()
+        if (!currentPlayer.play()) {
+            desiredPlaying = false
+            publishState()
+            return
+        }
         scheduleTick()
         publishState()
         onPlaybackStarted()
@@ -231,8 +235,11 @@ class PlaybackCoordinator(
         pendingSeekMs = null
         if (target > 0L) currentPlayer.seekTo(target)
         if (desiredPlaying) {
-            currentPlayer.play()
-            scheduleTick()
+            if (currentPlayer.play()) {
+                scheduleTick()
+            } else {
+                desiredPlaying = false
+            }
         }
         publishState()
         if (desiredPlaying) onPlaybackStarted()
