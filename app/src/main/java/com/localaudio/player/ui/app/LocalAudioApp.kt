@@ -1,0 +1,143 @@
+package com.localaudio.player.ui.app
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import com.localaudio.player.R
+import com.localaudio.player.app.AppDialog
+import com.localaudio.player.app.AppEvent
+import com.localaudio.player.app.AppScreen
+import com.localaudio.player.app.AppUiState
+import com.localaudio.player.app.SettingChange
+import com.localaudio.player.playback.PlaybackCommand
+import com.localaudio.player.ui.dialog.AppDialogs
+import com.localaudio.player.ui.home.HomeScreen
+import com.localaudio.player.ui.player.PlaybackBar
+import com.localaudio.player.ui.player.PlayerScreen
+import com.localaudio.player.ui.settings.SettingsScreen
+
+@Composable
+fun LocalAudioApp(
+    state: AppUiState,
+    onEvent: (AppEvent) -> Unit,
+) {
+    val dispatchPlayback: (PlaybackCommand) -> Unit = { command ->
+        onEvent(AppEvent.Playback(command))
+    }
+    val togglePlayback = {
+        dispatchPlayback(if (state.playback.isPlaying) PlaybackCommand.Pause else PlaybackCommand.Play)
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
+        color = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground,
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.weight(1f)) {
+                when (state.screen) {
+                    AppScreen.HOME -> HomeScreen(
+                        location = state.homeLocation,
+                        rows = state.homeRows,
+                        playingKey = state.playback.currentItem?.key,
+                        hasLibrary = state.hasLibrary,
+                        headerMode = state.settings.homeHeaderMode,
+                        onBack = { onEvent(AppEvent.Back) },
+                        onDirectoryClick = { onEvent(AppEvent.OpenDirectory(it)) },
+                        onAudioClick = { onEvent(AppEvent.PlayAudio(it)) },
+                        onAddFolder = { onEvent(AppEvent.AddFolder) },
+                    )
+
+                    AppScreen.PLAYER -> PlayerScreen(
+                        state = state.playback,
+                        seekStepMs = state.settings.seekStepMs,
+                        showStaticArtwork = state.settings.showStaticArtwork,
+                        onPlayPause = togglePlayback,
+                        onNext = { dispatchPlayback(PlaybackCommand.Next) },
+                        onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
+                        onSeekBy = { dispatchPlayback(PlaybackCommand.SeekBy(it)) },
+                        onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
+                        onOpenQueue = { onEvent(AppEvent.ShowDialog(AppDialog.Queue)) },
+                        onOpenTimer = { onEvent(AppEvent.ShowDialog(AppDialog.Timer)) },
+                        onOpenMode = { onEvent(AppEvent.ShowDialog(AppDialog.Mode)) },
+                    )
+
+                    AppScreen.SETTINGS -> SettingsScreen(
+                        settings = state.settings,
+                        folders = state.library.folders,
+                        scanStates = state.library.scanStates,
+                        onThemeClick = { onEvent(AppEvent.ShowDialog(AppDialog.Theme)) },
+                        onHeaderClick = { onEvent(AppEvent.ShowDialog(AppDialog.Header)) },
+                        onSetShowWhenLocked = { onEvent(AppEvent.UpdateSetting(SettingChange.SetShowWhenLocked(it))) },
+                        onSetShowStaticArtwork = { onEvent(AppEvent.UpdateSetting(SettingChange.SetShowStaticArtwork(it))) },
+                        onSetTimerEnabled = { onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerEnabled(it))) },
+                        onSetWaitForCurrentEnd = { onEvent(AppEvent.UpdateSetting(SettingChange.SetWaitForCurrentEnd(it))) },
+                        onSetSeekStep = { onEvent(AppEvent.UpdateSetting(SettingChange.SetSeekStep(it))) },
+                        onEditDuration = { onEvent(AppEvent.ShowDialog(AppDialog.EditDuration(it))) },
+                        onDeleteTimerDuration = { onEvent(AppEvent.UpdateSetting(SettingChange.DeleteTimerDuration(it))) },
+                        onAddFolder = { onEvent(AppEvent.AddFolder) },
+                        onRescanFolder = { onEvent(AppEvent.RescanFolder(it)) },
+                        onRemoveFolder = { onEvent(AppEvent.RemoveFolder(it)) },
+                        onRescanAll = { onEvent(AppEvent.RescanAll) },
+                        onClearFolders = { onEvent(AppEvent.ShowDialog(AppDialog.ClearFolders)) },
+                    )
+                }
+            }
+
+            if (state.screen != AppScreen.PLAYER) {
+                PlaybackBar(
+                    state = state.playback,
+                    onPlayPause = togglePlayback,
+                    onNext = { dispatchPlayback(PlaybackCommand.Next) },
+                    onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
+                    onOpenPlayer = { onEvent(AppEvent.SelectScreen(AppScreen.PLAYER)) },
+                )
+            }
+            BottomNavigation(state.screen) { onEvent(AppEvent.SelectScreen(it)) }
+        }
+
+        AppDialogs(state = state, onEvent = onEvent)
+    }
+}
+
+@Composable
+private fun BottomNavigation(screen: AppScreen, onScreenSelected: (AppScreen) -> Unit) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+        NavigationBarItem(
+            selected = screen == AppScreen.HOME,
+            onClick = { onScreenSelected(AppScreen.HOME) },
+            icon = { AppIcon(R.drawable.ic_home, "首页") },
+            label = { Text("首页") },
+        )
+        NavigationBarItem(
+            selected = screen == AppScreen.PLAYER,
+            onClick = { onScreenSelected(AppScreen.PLAYER) },
+            icon = { AppIcon(R.drawable.ic_play, "播放") },
+            label = { Text("播放") },
+        )
+        NavigationBarItem(
+            selected = screen == AppScreen.SETTINGS,
+            onClick = { onScreenSelected(AppScreen.SETTINGS) },
+            icon = { AppIcon(R.drawable.ic_settings, "设置") },
+            label = { Text("设置") },
+        )
+    }
+}
+
+@Composable
+private fun AppIcon(resource: Int, description: String) {
+    Icon(painterResource(resource), contentDescription = description, modifier = Modifier.size(22.dp))
+}

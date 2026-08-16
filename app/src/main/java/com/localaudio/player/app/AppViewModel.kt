@@ -1,0 +1,176 @@
+package com.localaudio.player.app
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.localaudio.player.data.library.LibraryRepository
+import com.localaudio.player.data.library.LibraryState
+import com.localaudio.player.data.model.AudioItem
+import com.localaudio.player.data.model.FolderLocation
+import com.localaudio.player.data.settings.AppSettings
+import com.localaudio.player.data.settings.SettingsRepository
+import com.localaudio.player.playback.PlaybackCommand
+import com.localaudio.player.playback.PlaybackConnection
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+
+class AppViewModel(
+    private val libraryRepository: LibraryRepository,
+    private val settingsRepository: SettingsRepository,
+    private val playbackConnection: PlaybackConnection,
+    private val homeRowsBuilder: HomeRowsBuilder,
+) : ViewModel() {
+    private val navigation = MutableStateFlow(
+        NavigationState(homeLocation = settingsRepository.state.value.savedHomeLocation),
+    )
+    private val _effects = Channel<AppEffect>(Channel.BUFFERED)
+
+    val effects: Flow<AppEffect> = _effects.receiveAsFlow()
+    val settings: StateFlow<AppSettings> = settingsRepository.state
+
+    private val homeContent = combine(
+        libraryRepository.state,
+        navigation.map { it.homeLocation }.distinctUntilChanged(),
+    ) { library, location ->
+        HomeContent(
+            library = library,
+            location = location,
+            rows = homeRowsBuilder.rows(library, location),
+        )
+    }
+
+    val uiState: StateFlow<AppUiState> = combine(
+        homeContent,
+        settingsRepository.state,
+        playbackConnection.state,
+        navigation,
+    ) { home, settings, playback, currentNavigation ->
+        AppUiState(
+            screen = currentNavigation.screen,
+            dialog = currentNavigation.dialog,
+            homeLocation = home.location,
+            homeRows = home.rows,
+            hasLibrary = home.library.items.isNotEmpty(),
+            library = home.library,
+            settings = settings,
+            playback = playback,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(
+            stopTimeoutMillis = 0,
+            replayExpirationMillis = 0,
+        ),
+        initialValue = AppUiState(settings = settingsRepository.state.value),
+    )
+
+    init {
+        playbackConnection.connect()
+    }
+
+    fun onEvent(event: AppEvent) {
+        when (event) {
+            is AppEvent.SelectScreen -> navigation.update { it.copy(screen = event.screen) }
+            AppEvent.Back -> goBack()
+            is AppEvent.OpenDirectory -> updateHomeLocation(event.location)
+            is AppEvent.PlayAudio -> playAudio(event.item)
+            AppEvent.AddFolder -> _effects.trySend(AppEffect.OpenFolderPicker)
+            is AppEvent.FolderSelected -> libraryRepository.addFolder(event.uri)
+            is AppEvent.Playback -> playbackConnection.dispatch(event.command)
+            is AppEvent.ShowDialog -> navigation.update { it.copy(dialog = event.dialog) }
+            AppEvent.DismissDialog -> navigation.update { it.copy(dialog = null) }
+            is AppEvent.UpdateSetting -> updateSetting(event.change)
+            is AppEvent.RescanFolder -> libraryRepository.rescan(event.uri)
+            is AppEvent.RemoveFolder -> libraryRepository.removeFolder(event.uri)
+            AppEvent.RescanAll -> libraryRepository.rescanAll()
+            AppEvent.ClearFolders -> libraryRepository.clearAll()
+            AppEvent.EnsureNotificationPermission -> ensureNotificationPermission()
+            AppEvent.NotificationPermissionRequestLaunched -> settingsRepository.markNotificationRequested()
+        }
+    }
+
+    override fun onCleared() {
+        playbackConnection.close()
+        super.onCleared()
+    }
+
+    private fun goBack() {
+        when (navigation.value.screen) {
+            AppScreen.PLAYER, AppScreen.SETTINGS -> navigation.update { it.copy(screen = AppScreen.HOME) }
+            AppScreen.HOME -> navigation.value.homeLocation?.let { updateHomeLocation(it.parent()) }
+        }
+    }
+
+    private fun updateHomeLocation(location: FolderLocation?) {
+        navigation.update { it.copy(homeLocation = location) }
+        settingsRepository.updateSavedHomeLocation(location)
+    }
+
+    private fun playAudio(item: AudioItem) {
+        homeRowsBuilder.queueFor(libraryRepository.state.value.items, item)?.let { (queue, index) ->
+            playbackConnection.dispatch(
+                PlaybackCommand.PlayQueue(queue, index),
+            )
+        }
+    }
+
+    private fun updateSetting(change: SettingChange) {
+        when (change) {
+            is SettingChange.SetThemeMode -> settingsRepository.updateThemeMode(change.value)
+            is SettingChange.SetHomeHeaderMode -> settingsRepository.updateHomeHeaderMode(change.value)
+            is SettingChange.SetShowWhenLocked -> settingsRepository.updateShowWhenLocked(change.value)
+            is SettingChange.SetShowStaticArtwork -> settingsRepository.updateShowStaticArtwork(change.value)
+            is SettingChange.SetTimerEnabled -> settingsRepository.updateTimerEnabled(change.value)
+            is SettingChange.SetTimerDuration -> settingsRepository.updateTimerDurationMs(change.valueMs)
+            is SettingChange.SetWaitForCurrentEnd -> settingsRepository.updateWaitForCurrentEnd(change.value)
+            is SettingChange.SetSeekStep -> settingsRepository.updateSeekStepMs(change.valueMs)
+            is SettingChange.AddTimerDuration -> {
+                val settings = settingsRepository.state.value
+                settingsRepository.updateTimerDurationOptions(settings.timerDurationOptionsMs + change.valueMs)
+            }
+
+            is SettingChange.EditTimerDuration -> {
+                val settings = settingsRepository.state.value
+                val selected = change.newValueMs.takeIf { settings.timerDurationMs == change.oldValueMs }
+                settingsRepository.updateTimerDurationOptions(
+                    settings.timerDurationOptionsMs.filterNot { it == change.oldValueMs } + change.newValueMs,
+                    selected,
+                )
+            }
+
+            is SettingChange.DeleteTimerDuration -> {
+                val settings = settingsRepository.state.value
+                settingsRepository.updateTimerDurationOptions(
+                    settings.timerDurationOptionsMs - change.valueMs,
+                )
+            }
+        }
+    }
+
+    private fun ensureNotificationPermission() {
+        if (!settingsRepository.notificationRequested()) {
+            _effects.trySend(AppEffect.RequestNotificationPermission)
+        }
+    }
+
+    private data class NavigationState(
+        val screen: AppScreen = AppScreen.HOME,
+        val dialog: AppDialog? = null,
+        val homeLocation: FolderLocation? = null,
+    )
+
+    private data class HomeContent(
+        val library: LibraryState,
+        val location: FolderLocation?,
+        val rows: List<HomeRow>,
+    )
+}
