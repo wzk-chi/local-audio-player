@@ -1,5 +1,6 @@
 *.iml
 .gradle
+.kotlin/
 /local.properties
 /.idea
 .DS_Store
@@ -8,3 +9,17 @@
 /captures
 .externalNativeBuild
 .cxx
+/docs/superpowers/
+AGENTS.md
+CLAUDE.md
+
+# Local secrets and Android signing files
+keystore.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+.env.local
