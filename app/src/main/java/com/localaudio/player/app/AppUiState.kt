@@ -10,7 +10,7 @@ import com.localaudio.player.data.settings.ThemeMode
 import com.localaudio.player.playback.PlaybackCommand
 import com.localaudio.player.playback.PlaybackState
 
-enum class AppScreen { HOME, PLAYER, SETTINGS }
+enum class AppScreen { HOME, PLAYER, SETTINGS, LIBRARY_SETTINGS }
 
 sealed interface AppDialog {
     data object Queue : AppDialog
@@ -18,6 +18,8 @@ sealed interface AppDialog {
     data object Timer : AppDialog
     data object Theme : AppDialog
     data object Header : AppDialog
+    data object SeekStep : AppDialog
+    data object TimerDuration : AppDialog
     data object AddDuration : AppDialog
 }
 

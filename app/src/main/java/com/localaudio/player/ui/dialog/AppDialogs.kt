@@ -2,14 +2,19 @@ package com.localaudio.player.ui.dialog
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -18,12 +23,15 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -112,6 +120,24 @@ internal fun AppDialogs(
             },
             onDismiss = { onEvent(AppEvent.DismissDialog) },
         )
+        AppDialog.SeekStep -> SeekStepDialog(
+            valueMs = state.settings.seekStepMs,
+            onSave = { valueMs ->
+                onEvent(AppEvent.UpdateSetting(SettingChange.SetSeekStep(valueMs)))
+                onEvent(AppEvent.DismissDialog)
+            },
+            onDismiss = { onEvent(AppEvent.DismissDialog) },
+        )
+        AppDialog.TimerDuration -> TimerDurationDialog(
+            settings = state.settings,
+            onSelect = { duration ->
+                onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerDuration(duration)))
+                onEvent(AppEvent.DismissDialog)
+            },
+            onAdd = { onEvent(AppEvent.ShowDialog(AppDialog.AddDuration)) },
+            onDelete = { onEvent(AppEvent.UpdateSetting(SettingChange.DeleteTimerDuration(it))) },
+            onDismiss = { onEvent(AppEvent.DismissDialog) },
+        )
         AppDialog.AddDuration -> AddDurationDialog(
             onSave = { value ->
                 onEvent(AppEvent.UpdateSetting(SettingChange.AddTimerDuration(value)))
@@ -125,22 +151,44 @@ internal fun AppDialogs(
 
 @Composable
 private fun QueueDialog(state: PlaybackState, onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
+    val listState = rememberLazyListState()
+    LaunchedEffect(state.currentIndex, state.queue.size) {
+        if (state.currentIndex in state.queue.indices) {
+            listState.scrollToItem(state.currentIndex)
+        }
+    }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("播放列表") }, text = {
-        LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
-            items(state.queue) { item ->
-                val index = state.queue.indexOf(item)
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.heightIn(max = 420.dp),
+        ) {
+            itemsIndexed(state.queue) { index, item ->
+                val active = index == state.currentIndex
                 ListItem(
-                    modifier = Modifier.fillMaxWidth().clickable { onSelect(index) },
-                    leadingContent = {
-                        RadioButton(
-                            selected = index == state.currentIndex,
-                            onClick = { onSelect(index) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.medium)
+                        .clickable { onSelect(index) },
+                    headlineContent = {
+                        Text(
+                            text = item.title,
+                            color = if (active) {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     },
-                    headlineContent = {
-                        Text(item.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    },
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    colors = ListItemDefaults.colors(
+                        containerColor = if (active) {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        } else {
+                            Color.Transparent
+                        },
+                    ),
                 )
             }
         }
@@ -166,7 +214,7 @@ private fun TimerDialog(state: PlaybackState, settings: AppSettings, onSetEnable
                     modifier = Modifier.fillMaxWidth().clickable { onSelectDuration(duration) },
                     leadingContent = {
                         RadioButton(
-                            selected = duration == settings.timerDurationMs,
+                            selected = state.timerActive && duration == state.activeTimerDurationMs,
                             onClick = { onSelectDuration(duration) },
                         )
                     },
@@ -174,9 +222,15 @@ private fun TimerDialog(state: PlaybackState, settings: AppSettings, onSetEnable
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 )
             }
-            if (state.timerActive) TextButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) { Text("关闭当前定时") }
         }
-    }, confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } })
+    },
+        dismissButton = {
+            if (state.timerActive) {
+                TextButton(onClick = onStop) { Text("取消本次定时") }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+    )
 }
 
 @Composable
@@ -198,6 +252,87 @@ private fun ChoiceDialog(title: String, options: List<String>, selected: Int, on
             }
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } })
+}
+
+@Composable
+private fun SeekStepDialog(
+    valueMs: Long,
+    onSave: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember { mutableStateOf((valueMs / 1000L).toString()) }
+    val valueSeconds = text.toLongOrNull()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("快进 / 快退跨度") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it.filter(Char::isDigit) },
+                singleLine = true,
+                label = { Text("秒数") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        confirmButton = {
+            TextButton(
+                enabled = valueSeconds != null && valueSeconds > 0L,
+                onClick = { valueSeconds?.let { onSave(it * 1000L) } },
+            ) {
+                Text("保存")
+            }
+        },
+    )
+}
+
+@Composable
+private fun TimerDurationDialog(
+    settings: AppSettings,
+    onSelect: (Long) -> Unit,
+    onAdd: () -> Unit,
+    onDelete: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("定时长度") },
+        text = {
+            Column {
+                settings.timerDurationOptionsMs.forEach { duration ->
+                    ListItem(
+                        modifier = Modifier.fillMaxWidth().clickable { onSelect(duration) },
+                        leadingContent = {
+                            RadioButton(
+                                selected = duration == settings.timerDurationMs,
+                                onClick = { onSelect(duration) },
+                            )
+                        },
+                        headlineContent = { Text(durationLabel(duration)) },
+                        trailingContent = {
+                            IconButton(
+                                onClick = { onDelete(duration) },
+                                enabled = settings.timerDurationOptionsMs.size > 1,
+                            ) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = "删除",
+                                )
+                            }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    )
+                }
+                TextButton(
+                    onClick = onAdd,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("添加自定义时长")
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+    )
 }
 
 @Composable

@@ -105,6 +105,7 @@ class AppViewModel(
 
     private fun goBack() {
         when (navigation.value.screen) {
+            AppScreen.LIBRARY_SETTINGS -> navigation.update { it.copy(screen = AppScreen.SETTINGS) }
             AppScreen.PLAYER, AppScreen.SETTINGS -> navigation.update { it.copy(screen = AppScreen.HOME) }
             AppScreen.HOME -> navigation.value.homeLocation?.let { updateHomeLocation(it.parent()) }
         }

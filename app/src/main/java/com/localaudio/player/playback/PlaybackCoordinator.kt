@@ -329,7 +329,7 @@ class PlaybackCoordinator(
             }
 
             TimerDecision.WaitForTrackEnd -> {
-                timerState = SleepTimerState(waitingForTrackEnd = true)
+                timerState = timerState.copy(expireAt = 0L, waitingForTrackEnd = true)
             }
         }
     }
@@ -380,6 +380,7 @@ class PlaybackCoordinator(
             repeatMode = settings.repeatMode,
             shuffleEnabled = settings.shuffleEnabled,
             timerExpireAt = timerState.expireAt,
+            activeTimerDurationMs = timerState.durationMs,
             timerRemainingMs = sleepTimer.remainingMs(timerState),
             timerWaitingForEnd = timerState.waitingForTrackEnd,
         )

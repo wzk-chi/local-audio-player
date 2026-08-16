@@ -31,6 +31,7 @@ import com.localaudio.player.ui.dialog.AppDialogs
 import com.localaudio.player.ui.home.HomeScreen
 import com.localaudio.player.ui.player.PlaybackBar
 import com.localaudio.player.ui.player.PlayerScreen
+import com.localaudio.player.ui.settings.LibrarySettingsScreen
 import com.localaudio.player.ui.settings.SettingsScreen
 
 @Composable
@@ -81,16 +82,21 @@ fun LocalAudioApp(
 
                     AppScreen.SETTINGS -> SettingsScreen(
                         settings = state.settings,
-                        folders = state.library.folders,
-                        scanStates = state.library.scanStates,
+                        folderCount = state.library.folders.size,
                         onThemeClick = { onEvent(AppEvent.ShowDialog(AppDialog.Theme)) },
                         onHeaderClick = { onEvent(AppEvent.ShowDialog(AppDialog.Header)) },
                         onSetShowWhenLocked = { onEvent(AppEvent.UpdateSetting(SettingChange.SetShowWhenLocked(it))) },
                         onSetTimerEnabled = { onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerEnabled(it))) },
                         onSetWaitForCurrentEnd = { onEvent(AppEvent.UpdateSetting(SettingChange.SetWaitForCurrentEnd(it))) },
-                        onSetSeekStep = { onEvent(AppEvent.UpdateSetting(SettingChange.SetSeekStep(it))) },
-                        onAddDuration = { onEvent(AppEvent.ShowDialog(AppDialog.AddDuration)) },
-                        onDeleteTimerDuration = { onEvent(AppEvent.UpdateSetting(SettingChange.DeleteTimerDuration(it))) },
+                        onSeekStepClick = { onEvent(AppEvent.ShowDialog(AppDialog.SeekStep)) },
+                        onTimerDurationClick = { onEvent(AppEvent.ShowDialog(AppDialog.TimerDuration)) },
+                        onOpenLibrary = { onEvent(AppEvent.SelectScreen(AppScreen.LIBRARY_SETTINGS)) },
+                    )
+
+                    AppScreen.LIBRARY_SETTINGS -> LibrarySettingsScreen(
+                        folders = state.library.folders,
+                        scanStates = state.library.scanStates,
+                        onBack = { onEvent(AppEvent.Back) },
                         onAddFolder = { onEvent(AppEvent.AddFolder) },
                         onRescanFolder = { onEvent(AppEvent.RescanFolder(it)) },
                         onRemoveFolder = { onEvent(AppEvent.RemoveFolder(it)) },
@@ -99,7 +105,8 @@ fun LocalAudioApp(
                 }
             }
 
-            if (state.screen != AppScreen.PLAYER) {
+            val isLibrarySettings = state.screen == AppScreen.LIBRARY_SETTINGS
+            if (state.screen != AppScreen.PLAYER && !isLibrarySettings) {
                 PlaybackBar(
                     state = state.playback,
                     onPlayPause = togglePlayback,
@@ -108,7 +115,9 @@ fun LocalAudioApp(
                     onOpenPlayer = { onEvent(AppEvent.SelectScreen(AppScreen.PLAYER)) },
                 )
             }
-            BottomNavigation(state.screen) { onEvent(AppEvent.SelectScreen(it)) }
+            if (!isLibrarySettings) {
+                BottomNavigation(state.screen) { onEvent(AppEvent.SelectScreen(it)) }
+            }
         }
 
         AppDialogs(state = state, onEvent = onEvent)
@@ -145,7 +154,7 @@ private fun BottomNavigation(screen: AppScreen, onScreenSelected: (AppScreen) ->
             colors = itemColors,
         )
         NavigationBarItem(
-            selected = screen == AppScreen.SETTINGS,
+            selected = screen == AppScreen.SETTINGS || screen == AppScreen.LIBRARY_SETTINGS,
             onClick = { onScreenSelected(AppScreen.SETTINGS) },
             icon = { Icon(Icons.Filled.Settings, contentDescription = "设置") },
             label = { Text("设置") },

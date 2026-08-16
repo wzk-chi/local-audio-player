@@ -2,6 +2,7 @@ package com.localaudio.player.playback
 
 data class SleepTimerState(
     val expireAt: Long = 0L,
+    val durationMs: Long = 0L,
     val waitingForTrackEnd: Boolean = false,
 )
 
@@ -14,9 +15,13 @@ sealed interface TimerDecision {
 class SleepTimer(
     private val now: () -> Long = System::currentTimeMillis,
 ) {
-    fun start(durationMs: Long): SleepTimerState = SleepTimerState(
-        expireAt = now() + durationMs.coerceAtLeast(1_000L),
-    )
+    fun start(durationMs: Long): SleepTimerState {
+        val actualDurationMs = durationMs.coerceAtLeast(1_000L)
+        return SleepTimerState(
+            expireAt = now() + actualDurationMs,
+            durationMs = actualDurationMs,
+        )
+    }
 
     fun stop(): SleepTimerState = SleepTimerState()
 

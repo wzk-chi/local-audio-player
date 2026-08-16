@@ -11,6 +11,7 @@ data class PlaybackState(
     val repeatMode: Int = 0,
     val shuffleEnabled: Boolean = false,
     val timerExpireAt: Long = 0L,
+    val activeTimerDurationMs: Long = 0L,
     val timerRemainingMs: Long = 0L,
     val timerWaitingForEnd: Boolean = false,
 ) {
