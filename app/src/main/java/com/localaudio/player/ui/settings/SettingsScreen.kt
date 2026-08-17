@@ -1,11 +1,9 @@
 package com.localaudio.player.ui.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,22 +12,17 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.localaudio.player.data.settings.AppSettings
 import com.localaudio.player.data.settings.HomeHeaderMode
 import com.localaudio.player.data.settings.ThemeMode
+import com.localaudio.player.ui.components.SettingChoiceRow
+import com.localaudio.player.ui.components.SettingSwitchRow
 import com.localaudio.player.ui.util.durationLabel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,19 +48,19 @@ fun SettingsScreen(
         ) {
             item {
                 SettingsSection("外观") {
-                    SettingsChoiceRow(
+                    SettingChoiceRow(
                         title = "主题模式",
                         value = themeLabel(settings.themeMode),
                         onClick = onThemeClick,
                     )
                     SettingsDivider()
-                    SettingsChoiceRow(
+                    SettingChoiceRow(
                         title = "首页顶栏",
                         value = headerLabel(settings.homeHeaderMode),
                         onClick = onHeaderClick,
                     )
                     SettingsDivider()
-                    SettingsSwitchRow(
+                    SettingSwitchRow(
                         title = "锁屏上方显示",
                         checked = settings.showWhenLocked,
                         onCheckedChange = onSetShowWhenLocked,
@@ -76,7 +69,7 @@ fun SettingsScreen(
             }
             item {
                 SettingsSection("播放") {
-                    SettingsChoiceRow(
+                    SettingChoiceRow(
                         title = "快进 / 快退跨度",
                         value = "${settings.seekStepMs / 1000L} 秒",
                         onClick = onSeekStepClick,
@@ -85,19 +78,19 @@ fun SettingsScreen(
             }
             item {
                 SettingsSection("定时暂停") {
-                    SettingsSwitchRow(
+                    SettingSwitchRow(
                         title = "自动定时",
                         checked = settings.timerEnabled,
                         onCheckedChange = onSetTimerEnabled,
                     )
                     SettingsDivider()
-                    SettingsSwitchRow(
+                    SettingSwitchRow(
                         title = "播放完当前音频后暂停",
                         checked = settings.waitForCurrentEnd,
                         onCheckedChange = onSetWaitForCurrentEnd,
                     )
                     SettingsDivider()
-                    SettingsChoiceRow(
+                    SettingChoiceRow(
                         title = "定时长度",
                         value = durationLabel(settings.timerDurationMs),
                         onClick = onTimerDurationClick,
@@ -106,7 +99,7 @@ fun SettingsScreen(
             }
             item {
                 SettingsSection("音乐库") {
-                    SettingsChoiceRow(
+                    SettingChoiceRow(
                         title = "音乐库",
                         value = if (folderCount == 0) "尚未添加文件夹" else "$folderCount 个文件夹",
                         onClick = onOpenLibrary,
@@ -139,54 +132,6 @@ private fun SettingsSection(
             content = content,
         )
     }
-}
-
-@Composable
-private fun SettingsChoiceRow(
-    title: String,
-    value: String,
-    onClick: () -> Unit,
-) {
-    ListItem(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        headlineContent = { Text(title) },
-        trailingContent = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    text = value,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Icon(Icons.Filled.ChevronRight, contentDescription = null)
-            }
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-    )
-}
-
-@Composable
-private fun SettingsSwitchRow(
-    title: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    ListItem(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) },
-        headlineContent = { Text(title) },
-        trailingContent = {
-            Switch(
-                checked = checked,
-                onCheckedChange = null,
-            )
-        },
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-    )
 }
 
 @Composable

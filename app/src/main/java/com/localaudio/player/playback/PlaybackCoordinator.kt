@@ -100,23 +100,14 @@ class PlaybackCoordinator(
         if (items.isEmpty()) return
         queue = items.toList()
         currentIndex = index.coerceIn(0, queue.lastIndex)
-        savedPositionMs = 0L
-        pendingSeekMs = null
         consecutiveLoadFailures = 0
-        desiredPlaying = true
-        startAutomaticTimer()
-        loadCurrent()
+        selectTrack(currentIndex, shouldPlay = true, restartAutomaticTimer = true)
     }
 
     private fun jumpToItem(index: Int) {
         if (index !in queue.indices) return
-        currentIndex = index
-        savedPositionMs = 0L
-        pendingSeekMs = null
         consecutiveLoadFailures = 0
-        desiredPlaying = true
-        startAutomaticTimer()
-        loadCurrent()
+        selectTrack(index, shouldPlay = true, restartAutomaticTimer = true)
     }
 
     private fun play() {
@@ -172,12 +163,7 @@ class PlaybackCoordinator(
             )
         ) {
             is QueueMove.Select -> {
-                currentIndex = move.index
-                savedPositionMs = 0L
-                pendingSeekMs = null
-                desiredPlaying = true
-                startAutomaticTimer()
-                loadCurrent()
+                selectTrack(move.index, shouldPlay = true, restartAutomaticTimer = true)
             }
 
             QueueMove.Stop -> Unit
@@ -223,8 +209,22 @@ class PlaybackCoordinator(
         publishState()
     }
 
+    private fun selectTrack(
+        index: Int,
+        shouldPlay: Boolean,
+        restartAutomaticTimer: Boolean,
+    ) {
+        currentIndex = index
+        savedPositionMs = 0L
+        pendingSeekMs = null
+        desiredPlaying = shouldPlay
+        if (restartAutomaticTimer) startAutomaticTimer()
+        loadCurrent()
+    }
+
     private fun onPrepared(event: PlayerEvent.Prepared) {
         val currentPlayer = player ?: return
+        consecutiveLoadFailures = 0
         val target = (pendingSeekMs ?: savedPositionMs).coerceIn(0L, event.durationMs.coerceAtLeast(0L))
         savedPositionMs = target
         pendingSeekMs = null
@@ -282,12 +282,11 @@ class PlaybackCoordinator(
             )
         ) {
             is QueueMove.Select -> {
-                currentIndex = move.index
-                savedPositionMs = 0L
-                pendingSeekMs = null
-                desiredPlaying = !manual || desiredPlaying || wasPlaying
-                if (manual) startAutomaticTimer()
-                loadCurrent()
+                selectTrack(
+                    index = move.index,
+                    shouldPlay = !manual || desiredPlaying || wasPlaying,
+                    restartAutomaticTimer = manual,
+                )
             }
 
             QueueMove.Stop -> {

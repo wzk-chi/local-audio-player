@@ -11,7 +11,6 @@ import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState as SessionPlaybackState
 import android.os.Binder
-import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -36,6 +35,8 @@ class PlaybackService : Service() {
 
     private val binder = LocalBinder()
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val notificationManager by lazy { getSystemService(NotificationManager::class.java) }
+    private var foregroundStarted = false
     private lateinit var coordinator: PlaybackCoordinator
     private lateinit var mediaSession: MediaSession
 
@@ -48,7 +49,7 @@ class PlaybackService : Service() {
             queueNavigator = QueueNavigator(),
             sleepTimer = SleepTimer(),
             mainHandler = Handler(Looper.getMainLooper()),
-            onPlaybackStarted = { startForeground(NOTIFICATION_ID, notification()) },
+            onPlaybackStarted = ::ensureForeground,
         )
         coordinator.attachPlayer(
             PlatformPlayer(
@@ -69,7 +70,10 @@ class PlaybackService : Service() {
         mediaSession.setSessionActivity(mainActivityPendingIntent())
         mediaSession.isActive = true
         serviceScope.launch {
-            coordinator.state.collect { state -> updateMediaSession(state) }
+            coordinator.state.collect { state ->
+                updateMediaSession(state)
+                if (foregroundStarted) notificationManager.notify(NOTIFICATION_ID, notification())
+            }
         }
     }
 
@@ -151,12 +155,19 @@ class PlaybackService : Service() {
             .build()
     }
 
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "播放控制", NotificationManager.IMPORTANCE_LOW),
-            )
+    private fun ensureForeground() {
+        if (!foregroundStarted) {
+            startForeground(NOTIFICATION_ID, notification())
+            foregroundStarted = true
+        } else {
+            notificationManager.notify(NOTIFICATION_ID, notification())
         }
+    }
+
+    private fun createNotificationChannel() {
+        notificationManager.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, "播放控制", NotificationManager.IMPORTANCE_LOW),
+        )
     }
 
     private fun mainActivityPendingIntent(): PendingIntent = PendingIntent.getActivity(

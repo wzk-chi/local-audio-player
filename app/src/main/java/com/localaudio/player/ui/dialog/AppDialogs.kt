@@ -46,7 +46,7 @@ import com.localaudio.player.data.settings.REPEAT_ONE
 import com.localaudio.player.data.settings.ThemeMode
 import com.localaudio.player.playback.PlaybackCommand
 import com.localaudio.player.playback.PlaybackState
-import com.localaudio.player.ui.components.SwitchRow
+import com.localaudio.player.ui.components.SettingSwitchRow
 import com.localaudio.player.ui.util.durationLabel
 
 @Composable
@@ -205,8 +205,8 @@ private fun ModeDialog(state: PlaybackState, onSelect: (Int, Boolean) -> Unit, o
 private fun TimerDialog(state: PlaybackState, settings: AppSettings, onSetEnabled: (Boolean) -> Unit, onSetWaitForEnd: (Boolean) -> Unit, onSelectDuration: (Long) -> Unit, onStop: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(onDismissRequest = onDismiss, title = { Text("定时暂停") }, text = {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            SwitchRow("自动定时", settings.timerEnabled, onSetEnabled, showDivider = true)
-            SwitchRow("播放完当前音频后暂停", settings.waitForCurrentEnd, onSetWaitForEnd, showDivider = false)
+            SettingSwitchRow("自动定时", settings.timerEnabled, onSetEnabled, showDivider = true)
+            SettingSwitchRow("播放完当前音频后暂停", settings.waitForCurrentEnd, onSetWaitForEnd)
             Text("定时时长", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
             settings.timerDurationOptionsMs.forEach { duration ->
                 ListItem(
@@ -260,7 +260,7 @@ private fun SeekStepDialog(
     onDismiss: () -> Unit,
 ) {
     var text by remember { mutableStateOf((valueMs / 1000L).toString()) }
-    val valueSeconds = text.toLongOrNull()
+    val valueSeconds = text.toLongOrNull()?.takeIf { it in 1L..(Long.MAX_VALUE / 1_000L) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("快进 / 快退跨度") },
@@ -337,7 +337,10 @@ private fun TimerDurationDialog(
 @Composable
 private fun AddDurationDialog(onSave: (Long) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf("") }
+    val durationMs = text.toLongOrNull()
+        ?.takeIf { it in 1L..(Long.MAX_VALUE / 60_000L) }
+        ?.times(60_000L)
     AlertDialog(onDismissRequest = onDismiss, title = { Text("添加定时长度") }, text = {
         OutlinedTextField(value = text, onValueChange = { text = it.filter(Char::isDigit) }, singleLine = true, label = { Text("分钟") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-    }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }, confirmButton = { TextButton(onClick = { text.toLongOrNull()?.takeIf { it > 0 }?.let { onSave(it * 60_000L) } }) { Text("保存") } })
+    }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }, confirmButton = { TextButton(enabled = durationMs != null, onClick = { durationMs?.let(onSave) }) { Text("保存") } })
 }

@@ -1,7 +1,6 @@
 package com.localaudio.player.data.model
 
 import android.net.Uri
-import java.util.Locale
 
 /** 单个音频文件。扫描结果快照，不可变。 */
 data class AudioItem(
@@ -20,5 +19,5 @@ data class AudioItem(
     val relativePath: String = "",
 ) {
     /** 去重用的稳定键。 */
-    val key: String get() = uri.toString().lowercase(Locale.ROOT)
+    val key: String get() = uri.normalizeScheme().toString()
 }

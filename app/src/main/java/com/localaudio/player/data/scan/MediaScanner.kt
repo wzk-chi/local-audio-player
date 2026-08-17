@@ -38,10 +38,9 @@ class MediaScanner(private val context: Context) {
         fun walk(documentId: String, depth: Int, relativePath: String) {
             if (depth > MAX_DEPTH) return
             val children = DocumentsContract.buildChildDocumentsUriUsingTree(folderUri, documentId)
-            val cursor = runCatching {
-                resolver.query(children, PROJECTION, null, null, null)
-            }.getOrNull()
-            cursor?.use { c ->
+            val cursor = resolver.query(children, PROJECTION, null, null, null)
+                ?: error("无法读取目录：$relativePath")
+            cursor.use { c ->
                 val idColumn = c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
                 val nameColumn = c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
                 val mimeColumn = c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)

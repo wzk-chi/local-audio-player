@@ -35,7 +35,6 @@ class PlaybackConnection(
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val currentBinder = service as PlaybackService.LocalBinder
-            currentBinder.dispatch(PlaybackCommand.StopTimer)
             binder.value = currentBinder
         }
 

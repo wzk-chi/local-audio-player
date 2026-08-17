@@ -56,7 +56,7 @@ class LibraryRepository(
         if (_state.value.folders.any { it.uri == uri.toString() }) return
         val folder = FolderItem(uri.toString(), queryDisplayName(uri) ?: fallbackFolderName(uri))
         _state.update { it.copy(folders = it.folders + folder) }
-        store.writeFolders(_state.value.folders)
+        persist { store.writeFolders(_state.value.folders) }
         startScan(folder)
     }
 
@@ -69,8 +69,12 @@ class LibraryRepository(
                 scanStates = it.scanStates - uriString,
             )
         }
-        store.writeFolders(_state.value.folders)
-        store.writeItems(_state.value.items)
+        val folders = _state.value.folders
+        val items = _state.value.items
+        persist {
+            store.writeFolders(folders)
+            store.writeItems(items)
+        }
     }
 
     fun rescan(uriString: String) {
@@ -116,7 +120,7 @@ class LibraryRepository(
                         )
                     }
                     jobs.remove(folder.uri)
-                    store.writeItems(items)
+                    persist { store.writeItems(items) }
                 }
             } catch (error: Exception) {
                 postCurrent(folder.uri, scanToken) {
@@ -142,6 +146,10 @@ class LibraryRepository(
     }.getOrNull()
 
     private fun post(block: () -> Unit) = mainHandler.post(block)
+
+    private fun persist(block: () -> Unit) {
+        executor.execute(block)
+    }
 
     private fun postCurrent(folderUri: String, scanToken: Long, block: () -> Unit) {
         mainHandler.post {
