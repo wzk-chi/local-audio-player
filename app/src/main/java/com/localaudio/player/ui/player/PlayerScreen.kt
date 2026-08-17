@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
@@ -24,8 +25,10 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
@@ -52,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
@@ -180,7 +184,7 @@ fun PlayerScreen(
                 onClick = onOpenTimer,
                 active = state.timerActive,
             )
-            PlayerAction(icon = Icons.Filled.Repeat, label = playModeLabel(state), onClick = onOpenMode)
+            PlayerAction(icon = playModeIcon(state), label = playModeLabel(state), onClick = onOpenMode)
             PlayerAction(icon = Icons.AutoMirrored.Filled.QueueMusic, label = "列表", onClick = onOpenQueue)
         }
     }
@@ -317,6 +321,13 @@ private fun playModeLabel(state: PlaybackState): String = when {
     state.repeatMode == REPEAT_ONE -> "单曲循环"
     state.repeatMode == REPEAT_ALL -> "列表循环"
     else -> "顺序"
+}
+
+private fun playModeIcon(state: PlaybackState): ImageVector = when {
+    state.shuffleEnabled -> Icons.Filled.Shuffle
+    state.repeatMode == REPEAT_ONE -> Icons.Filled.RepeatOne
+    state.repeatMode == REPEAT_ALL -> Icons.Filled.Repeat
+    else -> Icons.AutoMirrored.Filled.PlaylistPlay
 }
 
 private fun timerLabel(state: PlaybackState): String = when {

@@ -1,5 +1,6 @@
 package com.localaudio.player.playback
 
+import com.localaudio.player.data.settings.REPEAT_ALL
 import com.localaudio.player.data.model.AudioItem
 
 data class PlaybackState(
@@ -8,7 +9,7 @@ data class PlaybackState(
     val positionMs: Long = 0L,
     val durationMs: Long = 0L,
     val isPlaying: Boolean = false,
-    val repeatMode: Int = 0,
+    val repeatMode: Int = REPEAT_ALL,
     val shuffleEnabled: Boolean = false,
     val timerExpireAt: Long = 0L,
     val activeTimerDurationMs: Long = 0L,
