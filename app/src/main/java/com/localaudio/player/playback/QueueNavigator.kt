@@ -2,7 +2,6 @@ package com.localaudio.player.playback
 
 sealed interface QueueMove {
     data class Select(val index: Int) : QueueMove
-    data class Restart(val index: Int) : QueueMove
     data object Stop : QueueMove
 }
 
@@ -33,12 +32,10 @@ class QueueNavigator(
     fun previous(
         queueSize: Int,
         currentIndex: Int,
-        positionMs: Long,
         repeatMode: Int,
     ): QueueMove {
         if (queueSize <= 0) return QueueMove.Stop
         val safeIndex = currentIndex.coerceIn(0, queueSize - 1)
-        if (positionMs > 3_000L) return QueueMove.Restart(safeIndex)
         return when {
             safeIndex > 0 -> QueueMove.Select(safeIndex - 1)
             repeatMode == 2 -> QueueMove.Select(queueSize - 1)

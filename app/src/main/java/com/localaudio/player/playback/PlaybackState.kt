@@ -14,6 +14,7 @@ data class PlaybackState(
     val activeTimerDurationMs: Long = 0L,
     val timerRemainingMs: Long = 0L,
     val timerWaitingForEnd: Boolean = false,
+    val timerSource: TimerSource? = null,
 ) {
     val currentItem: AudioItem?
         get() = queue.getOrNull(currentIndex)

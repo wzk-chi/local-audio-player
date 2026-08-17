@@ -104,7 +104,7 @@ class PlaybackCoordinator(
         pendingSeekMs = null
         consecutiveLoadFailures = 0
         desiredPlaying = true
-        startAutomaticTimerIfNeeded()
+        startAutomaticTimer()
         loadCurrent()
     }
 
@@ -115,13 +115,13 @@ class PlaybackCoordinator(
         pendingSeekMs = null
         consecutiveLoadFailures = 0
         desiredPlaying = true
-        startAutomaticTimerIfNeeded()
+        startAutomaticTimer()
         loadCurrent()
     }
 
     private fun play() {
         if (queue.isEmpty()) return
-        startAutomaticTimerIfNeeded()
+        startAutomaticTimer()
         desiredPlaying = true
         val currentPlayer = player
         if (currentPlayer == null || !currentPlayer.isPrepared) {
@@ -168,23 +168,15 @@ class PlaybackCoordinator(
             val move = queueNavigator.previous(
                 queueSize = queue.size,
                 currentIndex = currentIndex,
-                positionMs = currentPosition(),
                 repeatMode = settingsRepository.state.value.repeatMode,
             )
         ) {
-            is QueueMove.Restart -> {
-                savedPositionMs = 0L
-                pendingSeekMs = 0L
-                player?.seekTo(0L)
-                persistPlayback()
-                publishState()
-            }
-
             is QueueMove.Select -> {
                 currentIndex = move.index
                 savedPositionMs = 0L
                 pendingSeekMs = null
                 desiredPlaying = true
+                startAutomaticTimer()
                 loadCurrent()
             }
 
@@ -207,8 +199,11 @@ class PlaybackCoordinator(
         publishState()
     }
 
-    private fun startTimer(durationMs: Long) {
-        timerState = sleepTimer.start(durationMs)
+    private fun startTimer(
+        durationMs: Long,
+        source: TimerSource = TimerSource.MANUAL,
+    ) {
+        timerState = sleepTimer.start(durationMs, source)
         scheduleTick()
         publishState()
     }
@@ -286,15 +281,12 @@ class PlaybackCoordinator(
                 automatic = !manual,
             )
         ) {
-            is QueueMove.Select, is QueueMove.Restart -> {
-                currentIndex = when (move) {
-                    is QueueMove.Select -> move.index
-                    is QueueMove.Restart -> move.index
-                    QueueMove.Stop -> currentIndex
-                }
+            is QueueMove.Select -> {
+                currentIndex = move.index
                 savedPositionMs = 0L
                 pendingSeekMs = null
                 desiredPlaying = !manual || desiredPlaying || wasPlaying
+                if (manual) startAutomaticTimer()
                 loadCurrent()
             }
 
@@ -307,9 +299,11 @@ class PlaybackCoordinator(
         }
     }
 
-    private fun startAutomaticTimerIfNeeded() {
+    private fun startAutomaticTimer() {
         val settings = settingsRepository.state.value
-        if (settings.timerEnabled && timerState.expireAt == 0L) startTimer(settings.timerDurationMs)
+        if (settings.timerEnabled && timerState.source != TimerSource.MANUAL) {
+            startTimer(settings.timerDurationMs, TimerSource.AUTOMATIC)
+        }
     }
 
     private fun checkTimer() {
@@ -383,6 +377,7 @@ class PlaybackCoordinator(
             activeTimerDurationMs = timerState.durationMs,
             timerRemainingMs = sleepTimer.remainingMs(timerState),
             timerWaitingForEnd = timerState.waitingForTrackEnd,
+            timerSource = timerState.source,
         )
     }
 }
