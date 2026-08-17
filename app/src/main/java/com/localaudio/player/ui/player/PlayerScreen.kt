@@ -117,11 +117,7 @@ fun PlayerScreen(
                 amplitude = { value ->
                     waveAmplitude * WavyProgressIndicatorDefaults.indicatorAmplitude(value)
                 },
-                waveSpeed = if (state.isPlaying) {
-                    WavyProgressIndicatorDefaults.LinearDeterminateWavelength
-                } else {
-                    0.dp
-                },
+                waveSpeed = WavyProgressIndicatorDefaults.LinearDeterminateWavelength,
                 modifier = Modifier.fillMaxWidth().clearAndSetSemantics { },
             )
             Slider(
