@@ -42,7 +42,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.localaudio.player.playback.PlaybackState
-import com.localaudio.player.ui.util.formatTime
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -145,14 +144,6 @@ fun PlaybackBar(
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                )
-            }
-            if (state.currentItem != null) {
-                Text(
-                    formatTime(state.positionMs),
-                    modifier = Modifier.padding(horizontal = 8.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             IconButton(
