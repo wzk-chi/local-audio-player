@@ -82,7 +82,6 @@ internal fun AppDialogs(
             onSetEnabled = { onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerEnabled(it))) },
             onSetWaitForEnd = { onEvent(AppEvent.UpdateSetting(SettingChange.SetWaitForCurrentEnd(it))) },
             onSelectDuration = { duration ->
-                onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerDuration(duration)))
                 onEvent(AppEvent.Playback(PlaybackCommand.StartTimer(duration)))
                 onEvent(AppEvent.DismissDialog)
             },
