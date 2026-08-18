@@ -91,7 +91,7 @@ fun SettingsScreen(
                     )
                     SettingsDivider()
                     SettingChoiceRow(
-                        title = "定时长度",
+                        title = "自动定时时长",
                         value = durationLabel(settings.timerDurationMs),
                         onClick = onTimerDurationClick,
                     )

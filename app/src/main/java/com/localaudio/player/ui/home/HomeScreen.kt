@@ -50,6 +50,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -69,6 +70,8 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(
+    modifier: Modifier = Modifier,
+    visible: Boolean = true,
     location: FolderLocation?,
     rows: List<HomeRow>,
     playingKey: String?,
@@ -104,7 +107,11 @@ fun HomeScreen(
         if (index >= 0) listState.animateScrollToItem(index)
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .graphicsLayer { alpha = if (visible) 1f else 0f },
+    ) {
         if (headerVisible) {
             HomeHeader(
                 location = location,

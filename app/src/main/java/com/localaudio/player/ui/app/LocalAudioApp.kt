@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
@@ -53,34 +54,41 @@ fun LocalAudioApp(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f)) {
-                when (state.screen) {
-                    AppScreen.HOME -> HomeScreen(
-                        location = state.homeLocation,
-                        rows = state.homeRows,
-                        playingKey = state.playback.currentItem?.key,
-                        hasLibrary = state.hasLibrary,
-                        headerMode = state.settings.homeHeaderMode,
-                        onBack = { onEvent(AppEvent.Back) },
-                        onLocateCurrent = { onEvent(AppEvent.LocateCurrent) },
-                        onDirectoryClick = { onEvent(AppEvent.OpenDirectory(it)) },
-                        onAudioClick = { onEvent(AppEvent.PlayAudio(it)) },
-                        onAddFolder = { onEvent(AppEvent.AddFolder) },
-                    )
+                HomeScreen(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(if (state.screen == AppScreen.HOME) 1f else 0f),
+                    visible = state.screen == AppScreen.HOME,
+                    location = state.homeLocation,
+                    rows = state.homeRows,
+                    playingKey = state.playback.currentItem?.key,
+                    hasLibrary = state.hasLibrary,
+                    headerMode = state.settings.homeHeaderMode,
+                    onBack = { onEvent(AppEvent.Back) },
+                    onLocateCurrent = { onEvent(AppEvent.LocateCurrent) },
+                    onDirectoryClick = { onEvent(AppEvent.OpenDirectory(it)) },
+                    onAudioClick = { onEvent(AppEvent.PlayAudio(it)) },
+                    onAddFolder = { onEvent(AppEvent.AddFolder) },
+                )
+                PlayerScreen(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(if (state.screen == AppScreen.PLAYER) 1f else 0f),
+                    visible = state.screen == AppScreen.PLAYER,
+                    state = state.playback,
+                    seekStepMs = state.settings.seekStepMs,
+                    onPlayPause = togglePlayback,
+                    onNext = { dispatchPlayback(PlaybackCommand.Next) },
+                    onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
+                    onSeekBy = { dispatchPlayback(PlaybackCommand.SeekBy(it)) },
+                    onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
+                    onOpenQueue = { onEvent(AppEvent.ShowDialog(AppDialog.Queue)) },
+                    onOpenTimer = { onEvent(AppEvent.ShowDialog(AppDialog.Timer)) },
+                    onOpenMode = { onEvent(AppEvent.ShowDialog(AppDialog.Mode)) },
+                )
 
-                    AppScreen.PLAYER -> PlayerScreen(
-                        state = state.playback,
-                        seekStepMs = state.settings.seekStepMs,
-                        onPlayPause = togglePlayback,
-                        onNext = { dispatchPlayback(PlaybackCommand.Next) },
-                        onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
-                        onSeekBy = { dispatchPlayback(PlaybackCommand.SeekBy(it)) },
-                        onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
-                        onOpenQueue = { onEvent(AppEvent.ShowDialog(AppDialog.Queue)) },
-                        onOpenTimer = { onEvent(AppEvent.ShowDialog(AppDialog.Timer)) },
-                        onOpenMode = { onEvent(AppEvent.ShowDialog(AppDialog.Mode)) },
-                    )
-
-                    AppScreen.SETTINGS -> SettingsScreen(
+                if (state.screen == AppScreen.SETTINGS) {
+                    SettingsScreen(
                         settings = state.settings,
                         folderCount = state.library.folders.size,
                         onThemeClick = { onEvent(AppEvent.ShowDialog(AppDialog.Theme)) },
@@ -92,8 +100,8 @@ fun LocalAudioApp(
                         onTimerDurationClick = { onEvent(AppEvent.ShowDialog(AppDialog.TimerDuration)) },
                         onOpenLibrary = { onEvent(AppEvent.SelectScreen(AppScreen.LIBRARY_SETTINGS)) },
                     )
-
-                    AppScreen.LIBRARY_SETTINGS -> LibrarySettingsScreen(
+                } else if (state.screen == AppScreen.LIBRARY_SETTINGS) {
+                    LibrarySettingsScreen(
                         folders = state.library.folders,
                         scanStates = state.library.scanStates,
                         onBack = { onEvent(AppEvent.Back) },

@@ -1,19 +1,21 @@
 package com.localaudio.player.ui.player
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -31,16 +33,10 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.WavyProgressIndicatorDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,21 +48,23 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.localaudio.player.data.settings.REPEAT_ALL
 import com.localaudio.player.data.settings.REPEAT_ONE
 import com.localaudio.player.playback.PlaybackState
 import com.localaudio.player.ui.components.PlayerAction
+import com.localaudio.player.ui.components.PlayerTransportSegment
+import com.localaudio.player.ui.components.WavyPlayerSlider
 import com.localaudio.player.ui.util.formatTime
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -74,6 +72,8 @@ import kotlin.math.abs
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PlayerScreen(
+    modifier: Modifier = Modifier,
+    visible: Boolean = true,
     state: PlaybackState,
     seekStepMs: Long,
     onPlayPause: () -> Unit,
@@ -92,14 +92,11 @@ fun PlayerScreen(
         if (!seeking) sliderValue = state.positionMs.toFloat()
     }
     val max = state.durationMs.coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toFloat()
-    val waveAmplitude by animateFloatAsState(
-        targetValue = if (state.isPlaying) 1f else 0f,
-        animationSpec = tween(durationMillis = 1_000),
-        label = "waveAmplitude",
-    )
-
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 8.dp),
+        modifier = modifier
+            .fillMaxSize()
+            .graphicsLayer { alpha = if (visible) 1f else 0f }
+            .padding(horizontal = 20.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(modifier = Modifier.weight(1f))
@@ -111,81 +108,143 @@ fun PlayerScreen(
             onPrevious = onPrevious,
         )
         Spacer(modifier = Modifier.height(18.dp))
+        val segmentStartShape = RoundedCornerShape(
+            topStart = 60.dp,
+            bottomStart = 60.dp,
+            topEnd = 8.dp,
+            bottomEnd = 8.dp,
+        )
+        val segmentEndShape = RoundedCornerShape(
+            topStart = 8.dp,
+            bottomStart = 8.dp,
+            topEnd = 60.dp,
+            bottomEnd = 60.dp,
+        )
+        val segmentInnerShape = RoundedCornerShape(8.dp)
         Box(
             modifier = Modifier.fillMaxWidth().height(48.dp),
             contentAlignment = Alignment.Center,
         ) {
-            val progress = { (sliderValue / max).coerceIn(0f, 1f) }
-            LinearWavyProgressIndicator(
-                progress = progress,
-                amplitude = { value ->
-                    waveAmplitude * WavyProgressIndicatorDefaults.indicatorAmplitude(value)
-                },
-                waveSpeed = WavyProgressIndicatorDefaults.LinearDeterminateWavelength,
-                modifier = Modifier.fillMaxWidth().clearAndSetSemantics { },
-            )
-            Slider(
-                value = sliderValue.coerceIn(0f, max),
-                onValueChange = { seeking = true; sliderValue = it },
+            WavyPlayerSlider(
+                value = (sliderValue / max).coerceIn(0f, 1f),
+                onValueChange = { seeking = true; sliderValue = it * max },
                 onValueChangeFinished = {
                     if (seeking) {
                         seeking = false
                         onSeekTo(sliderValue.toLong())
                     }
                 },
-                valueRange = 0f..max,
                 enabled = state.currentItem != null,
-                colors = SliderDefaults.colors(
-                    thumbColor = Color.Transparent,
-                    activeTrackColor = Color.Transparent,
-                    inactiveTrackColor = Color.Transparent,
-                    activeTickColor = Color.Transparent,
-                    inactiveTickColor = Color.Transparent,
-                    disabledThumbColor = Color.Transparent,
-                    disabledActiveTrackColor = Color.Transparent,
-                    disabledInactiveTrackColor = Color.Transparent,
-                ),
+                isPlaying = state.isPlaying,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset(y = (-4).dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
             Text(formatTime(if (seeking) sliderValue.toLong() else state.positionMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(formatTime(state.durationMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
-            IconButton(onClick = { onSeekBy(-seekStepMs) }, modifier = Modifier.size(52.dp)) {
-                Icon(Icons.Filled.FastRewind, contentDescription = "快退")
-            }
-            IconButton(onClick = onPrevious, modifier = Modifier.size(52.dp)) {
-                Icon(Icons.Filled.SkipPrevious, contentDescription = "上一曲")
-            }
-            FilledIconButton(onClick = onPlayPause, modifier = Modifier.size(68.dp), enabled = state.currentItem != null) {
-                Icon(
-                    imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = if (state.isPlaying) "暂停" else "播放",
-                    modifier = Modifier.size(30.dp),
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(76.dp)
+                .padding(horizontal = 8.dp)
+                .clip(RoundedCornerShape(60.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainer),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PlayerTransportSegment(
+                    icon = Icons.Filled.FastRewind,
+                    contentDescription = "快退",
+                    onClick = { onSeekBy(-seekStepMs) },
+                    shape = segmentStartShape,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
-            }
-            IconButton(onClick = onNext, modifier = Modifier.size(52.dp)) {
-                Icon(Icons.Filled.SkipNext, contentDescription = "下一曲")
-            }
-            IconButton(onClick = { onSeekBy(seekStepMs) }, modifier = Modifier.size(52.dp)) {
-                Icon(Icons.Filled.FastForward, contentDescription = "快进")
+                PlayerTransportSegment(
+                    icon = Icons.Filled.SkipPrevious,
+                    contentDescription = "上一曲",
+                    onClick = onPrevious,
+                    shape = segmentInnerShape,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                )
+                PlayerTransportSegment(
+                    icon = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    contentDescription = if (state.isPlaying) "暂停" else "播放",
+                    onClick = onPlayPause,
+                    shape = segmentInnerShape,
+                    enabled = state.currentItem != null,
+                    iconSize = 36.dp,
+                    active = true,
+                    modifier = Modifier.weight(1.3f).fillMaxHeight(),
+                )
+                PlayerTransportSegment(
+                    icon = Icons.Filled.SkipNext,
+                    contentDescription = "下一曲",
+                    onClick = onNext,
+                    shape = segmentInnerShape,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                )
+                PlayerTransportSegment(
+                    icon = Icons.Filled.FastForward,
+                    contentDescription = "快进",
+                    onClick = { onSeekBy(seekStepMs) },
+                    shape = segmentEndShape,
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                )
             }
         }
         Spacer(modifier = Modifier.height(10.dp))
+        val actionStartShape = RoundedCornerShape(
+            topStart = 24.dp,
+            bottomStart = 24.dp,
+            topEnd = 8.dp,
+            bottomEnd = 8.dp,
+        )
+        val actionEndShape = RoundedCornerShape(
+            topStart = 8.dp,
+            bottomStart = 8.dp,
+            topEnd = 24.dp,
+            bottomEnd = 24.dp,
+        )
+        val actionInnerShape = RoundedCornerShape(8.dp)
         Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier
+                .height(52.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
+            PlayerAction(
+                icon = playModeIcon(state),
+                label = playModeLabel(state),
+                onClick = onOpenMode,
+                shape = actionStartShape,
+                modifier = Modifier.size(width = 96.dp, height = 52.dp),
+            )
             PlayerAction(
                 icon = Icons.Filled.Timer,
                 label = timerLabel(state),
                 onClick = onOpenTimer,
+                shape = actionInnerShape,
                 active = state.timerActive,
+                modifier = Modifier.size(width = 96.dp, height = 52.dp),
             )
-            PlayerAction(icon = playModeIcon(state), label = playModeLabel(state), onClick = onOpenMode)
-            PlayerAction(icon = Icons.AutoMirrored.Filled.QueueMusic, label = "列表", onClick = onOpenQueue)
+            PlayerAction(
+                icon = Icons.AutoMirrored.Filled.QueueMusic,
+                label = "列表",
+                onClick = onOpenQueue,
+                shape = actionEndShape,
+                modifier = Modifier.size(width = 96.dp, height = 52.dp),
+            )
         }
     }
 }
