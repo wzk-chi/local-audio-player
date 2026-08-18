@@ -17,7 +17,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.localaudio.player.R
 import com.localaudio.player.data.settings.AppSettings
 import com.localaudio.player.data.settings.HomeHeaderMode
 import com.localaudio.player.data.settings.ThemeMode
@@ -63,13 +65,13 @@ fun SettingsScreen(
                     )
                     SettingsDivider()
                     SettingSwitchRow(
-                        title = "首页从底部向上排列",
+                        title = stringResource(R.string.settings_home_list_bottom_aligned),
                         checked = settings.homeListBottomUp,
                         onCheckedChange = onSetHomeListBottomUp,
                     )
                     SettingsDivider()
                     SettingSwitchRow(
-                        title = "显示专辑封面",
+                        title = stringResource(R.string.settings_show_album_cover),
                         checked = settings.showAlbumCover,
                         onCheckedChange = onSetShowAlbumCover,
                     )

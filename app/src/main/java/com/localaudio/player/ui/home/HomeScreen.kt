@@ -51,15 +51,12 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.hideFromAccessibility
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -74,7 +71,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
-    visible: Boolean = true,
     location: FolderLocation?,
     rows: List<HomeRow>,
     playingKey: String?,
@@ -113,12 +109,7 @@ fun HomeScreen(
     }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .graphicsLayer { alpha = if (visible) 1f else 0f }
-            .semantics {
-                if (!visible) hideFromAccessibility()
-            },
+        modifier = modifier.fillMaxSize(),
     ) {
         if (headerVisible) {
             HomeHeader(

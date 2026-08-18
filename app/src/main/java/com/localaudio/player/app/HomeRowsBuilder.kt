@@ -12,8 +12,8 @@ class HomeRowsBuilder {
             .sortedWith { left, right -> compareNatural(left.location.name, right.location.name) }
     } else {
         buildList {
-            addAll(audioIn(state.items, location.folderUri, location.relativePath).map(HomeRow::Audio))
             addAll(immediateDirectories(state.items, location).map(HomeRow::Directory))
+            addAll(audioIn(state.items, location.folderUri, location.relativePath).map(HomeRow::Audio))
         }
     }
 

@@ -53,8 +53,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.hideFromAccessibility
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -71,7 +69,6 @@ import kotlin.math.abs
 @Composable
 fun PlayerScreen(
     modifier: Modifier = Modifier,
-    visible: Boolean = true,
     state: PlaybackState,
     seekStepMs: Long,
     showAlbumCover: Boolean,
@@ -94,10 +91,6 @@ fun PlayerScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .graphicsLayer { alpha = if (visible) 1f else 0f }
-            .semantics {
-                if (!visible) hideFromAccessibility()
-            }
             .padding(horizontal = 20.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

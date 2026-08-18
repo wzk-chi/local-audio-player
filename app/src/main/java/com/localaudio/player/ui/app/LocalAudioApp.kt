@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
@@ -21,8 +20,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.localaudio.player.app.AppDialog
 import com.localaudio.player.app.AppEvent
@@ -56,44 +53,35 @@ fun LocalAudioApp(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f)) {
-                HomeScreen(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .zIndex(if (state.screen == AppScreen.HOME) 1f else 0f)
-                        .consumeInputWhenHidden(state.screen != AppScreen.HOME),
-                    visible = state.screen == AppScreen.HOME,
-                    location = state.homeLocation,
-                    rows = state.homeRows,
-                    playingKey = state.playback.currentItem?.key,
-                    headerMode = state.settings.homeHeaderMode,
-                    listBottomUp = state.settings.homeListBottomUp,
-                    onBack = { onEvent(AppEvent.Back) },
-                    onLocateCurrent = { onEvent(AppEvent.LocateCurrent) },
-                    onDirectoryClick = { onEvent(AppEvent.OpenDirectory(it)) },
-                    onAudioClick = { onEvent(AppEvent.PlayAudio(it)) },
-                    onAddFolder = { onEvent(AppEvent.AddFolder) },
-                )
-                PlayerScreen(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .zIndex(if (state.screen == AppScreen.PLAYER) 1f else 0f)
-                        .consumeInputWhenHidden(state.screen != AppScreen.PLAYER),
-                    visible = state.screen == AppScreen.PLAYER,
-                    state = state.playback,
-                    seekStepMs = state.settings.seekStepMs,
-                    showAlbumCover = state.settings.showAlbumCover,
-                    onPlayPause = togglePlayback,
-                    onNext = { dispatchPlayback(PlaybackCommand.Next) },
-                    onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
-                    onSeekBy = { dispatchPlayback(PlaybackCommand.SeekBy(it)) },
-                    onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
-                    onOpenQueue = { onEvent(AppEvent.ShowDialog(AppDialog.Queue)) },
-                    onOpenTimer = { onEvent(AppEvent.ShowDialog(AppDialog.Timer)) },
-                    onOpenMode = { onEvent(AppEvent.ShowDialog(AppDialog.Mode)) },
-                )
-
-                if (state.screen == AppScreen.SETTINGS) {
-                    SettingsScreen(
+                when (state.screen) {
+                    AppScreen.HOME -> HomeScreen(
+                        modifier = Modifier.fillMaxSize(),
+                        location = state.homeLocation,
+                        rows = state.homeRows,
+                        playingKey = state.playback.currentItem?.key,
+                        headerMode = state.settings.homeHeaderMode,
+                        listBottomUp = state.settings.homeListBottomUp,
+                        onBack = { onEvent(AppEvent.Back) },
+                        onLocateCurrent = { onEvent(AppEvent.LocateCurrent) },
+                        onDirectoryClick = { onEvent(AppEvent.OpenDirectory(it)) },
+                        onAudioClick = { onEvent(AppEvent.PlayAudio(it)) },
+                        onAddFolder = { onEvent(AppEvent.AddFolder) },
+                    )
+                    AppScreen.PLAYER -> PlayerScreen(
+                        modifier = Modifier.fillMaxSize(),
+                        state = state.playback,
+                        seekStepMs = state.settings.seekStepMs,
+                        showAlbumCover = state.settings.showAlbumCover,
+                        onPlayPause = togglePlayback,
+                        onNext = { dispatchPlayback(PlaybackCommand.Next) },
+                        onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
+                        onSeekBy = { dispatchPlayback(PlaybackCommand.SeekBy(it)) },
+                        onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
+                        onOpenQueue = { onEvent(AppEvent.ShowDialog(AppDialog.Queue)) },
+                        onOpenTimer = { onEvent(AppEvent.ShowDialog(AppDialog.Timer)) },
+                        onOpenMode = { onEvent(AppEvent.ShowDialog(AppDialog.Mode)) },
+                    )
+                    AppScreen.SETTINGS -> SettingsScreen(
                         settings = state.settings,
                         folderCount = state.library.folders.size,
                         onThemeClick = { onEvent(AppEvent.ShowDialog(AppDialog.Theme)) },
@@ -107,8 +95,7 @@ fun LocalAudioApp(
                         onTimerDurationClick = { onEvent(AppEvent.ShowDialog(AppDialog.TimerDuration)) },
                         onOpenLibrary = { onEvent(AppEvent.SelectScreen(AppScreen.LIBRARY_SETTINGS)) },
                     )
-                } else if (state.screen == AppScreen.LIBRARY_SETTINGS) {
-                    LibrarySettingsScreen(
+                    AppScreen.LIBRARY_SETTINGS -> LibrarySettingsScreen(
                         folders = state.library.folders,
                         scanStates = state.library.scanStates,
                         onBack = { onEvent(AppEvent.Back) },
@@ -138,16 +125,6 @@ fun LocalAudioApp(
         AppDialogs(state = state, onEvent = onEvent)
     }
 }
-
-private fun Modifier.consumeInputWhenHidden(hidden: Boolean): Modifier =
-    pointerInput(hidden) {
-        if (!hidden) return@pointerInput
-        awaitPointerEventScope {
-            while (true) {
-                awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
-            }
-        }
-    }
 
 @Composable
 private fun BottomNavigation(screen: AppScreen, onScreenSelected: (AppScreen) -> Unit) {

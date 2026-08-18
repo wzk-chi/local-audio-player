@@ -4,8 +4,9 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +20,8 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.WavyProgressIndicatorDefaults
@@ -37,7 +40,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Shape
@@ -142,7 +144,10 @@ internal fun WavyPlayerSlider(
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    var isSeeking by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isDragged by interactionSource.collectIsDraggedAsState()
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val isSeeking = isDragged || isPressed
     var renderedValue by remember { mutableFloatStateOf(value.coerceIn(0f, 1f)) }
     LaunchedEffect(value, isSeeking) {
         if (!isSeeking) renderedValue = value.coerceIn(0f, 1f)
@@ -192,7 +197,6 @@ internal fun WavyPlayerSlider(
         Canvas(modifier = Modifier.fillMaxSize()) {
             val trackStart = trackEdgePaddingPx
             val trackEnd = size.width - trackEdgePaddingPx
-            val trackCenterY = size.height / 2f
             val thumbX = trackStart + (trackEnd - trackStart) * renderedValue
             val thumbWidth = thumbRadiusPx * 2f * (1f - thumbInteractionFraction) +
                 trackStroke.width * 1.2f * thumbInteractionFraction
@@ -208,57 +212,29 @@ internal fun WavyPlayerSlider(
                 cornerRadius = CornerRadius(thumbWidth / 2f),
             )
         }
-        Box(
+        Slider(
+            value = renderedValue,
+            onValueChange = { newValue ->
+                renderedValue = newValue
+                onValueChange(newValue)
+            },
+            onValueChangeFinished = onValueChangeFinished,
+            valueRange = 0f..1f,
+            enabled = enabled,
+            interactionSource = interactionSource,
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(enabled, trackEdgePaddingPx) {
-                    if (!enabled) return@pointerInput
-
-                    fun valueForX(rawX: Float): Float {
-                        val edgePadding = trackEdgePaddingPx.coerceIn(0f, size.width / 2f)
-                        val trackWidth = (size.width - edgePadding * 2f).coerceAtLeast(1f)
-                        return ((rawX - edgePadding) / trackWidth).coerceIn(0f, 1f)
-                    }
-
-                    awaitEachGesture {
-                        var seekValue: Float? = null
-                        var finished = false
-                        try {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            isSeeking = true
-                            down.consume()
-                            var latestValue = valueForX(down.position.x)
-                            seekValue = latestValue
-                            renderedValue = latestValue
-                            onValueChange(latestValue)
-
-                            var pointerId = down.id
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == pointerId }
-                                    ?: event.changes.firstOrNull { it.pressed }
-                                    ?: break
-                                pointerId = change.id
-                                if (!change.pressed) {
-                                    change.consume()
-                                    break
-                                }
-                                if (change.position != change.previousPosition) {
-                                    change.consume()
-                                    latestValue = valueForX(change.position.x)
-                                    seekValue = latestValue
-                                    renderedValue = latestValue
-                                    onValueChange(latestValue)
-                                }
-                            }
-                            finished = true
-                            onValueChangeFinished()
-                        } finally {
-                            isSeeking = false
-                            if (!finished && seekValue != null) onValueChangeFinished()
-                        }
-                    }
-                },
+                .padding(horizontal = 0.dp),
+            colors = SliderDefaults.colors(
+                thumbColor = Color.Transparent,
+                activeTrackColor = Color.Transparent,
+                inactiveTrackColor = Color.Transparent,
+                activeTickColor = Color.Transparent,
+                inactiveTickColor = Color.Transparent,
+                disabledThumbColor = Color.Transparent,
+                disabledActiveTrackColor = Color.Transparent,
+                disabledInactiveTrackColor = Color.Transparent,
+            ),
         )
     }
 }

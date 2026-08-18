@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">余音</string>
+    <string name="settings_home_list_bottom_aligned">首页列表底部对齐</string>
+    <string name="settings_show_album_cover">显示专辑封面</string>
 </resources>
