@@ -33,6 +33,7 @@ fun SettingsScreen(
     onThemeClick: () -> Unit,
     onHeaderClick: () -> Unit,
     onSetHomeListBottomUp: (Boolean) -> Unit,
+    onSetShowAlbumCover: (Boolean) -> Unit,
     onSetShowWhenLocked: (Boolean) -> Unit,
     onSetTimerEnabled: (Boolean) -> Unit,
     onSetWaitForCurrentEnd: (Boolean) -> Unit,
@@ -65,6 +66,12 @@ fun SettingsScreen(
                         title = "首页从底部向上排列",
                         checked = settings.homeListBottomUp,
                         onCheckedChange = onSetHomeListBottomUp,
+                    )
+                    SettingsDivider()
+                    SettingSwitchRow(
+                        title = "显示专辑封面",
+                        checked = settings.showAlbumCover,
+                        onCheckedChange = onSetShowAlbumCover,
                     )
                     SettingsDivider()
                     SettingSwitchRow(

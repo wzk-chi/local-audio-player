@@ -25,6 +25,9 @@ class SettingsRepository(context: Context) {
     fun updateHomeListBottomUp(value: Boolean) =
         updateBoolean(KEY_HOME_LIST_BOTTOM_UP, value) { it.copy(homeListBottomUp = value) }
 
+    fun updateShowAlbumCover(value: Boolean) =
+        updateBoolean(KEY_SHOW_ALBUM_COVER, value) { it.copy(showAlbumCover = value) }
+
     fun updateShowWhenLocked(value: Boolean) =
         updateBoolean(KEY_SHOW_WHEN_LOCKED, value) { it.copy(showWhenLocked = value) }
 
@@ -141,6 +144,7 @@ class SettingsRepository(context: Context) {
                 HomeHeaderMode.FIXED,
             ),
             homeListBottomUp = preferences.getBoolean(KEY_HOME_LIST_BOTTOM_UP, false),
+            showAlbumCover = preferences.getBoolean(KEY_SHOW_ALBUM_COVER, true),
             showWhenLocked = preferences.getBoolean(KEY_SHOW_WHEN_LOCKED, false),
             timerEnabled = preferences.getBoolean(KEY_TIMER_ENABLED, true),
             timerDurationMs = duration,
@@ -171,6 +175,7 @@ class SettingsRepository(context: Context) {
         const val KEY_THEME = "theme"
         const val KEY_HEADER = "header"
         const val KEY_HOME_LIST_BOTTOM_UP = "home_list_bottom_up"
+        const val KEY_SHOW_ALBUM_COVER = "show_album_cover"
         const val KEY_SHOW_WHEN_LOCKED = "show_when_locked"
         const val KEY_TIMER_ENABLED = "timer_enabled"
         const val KEY_TIMER_DURATION = "timer_duration"

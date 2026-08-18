@@ -21,6 +21,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.localaudio.player.app.AppDialog
 import com.localaudio.player.app.AppEvent
@@ -57,7 +59,8 @@ fun LocalAudioApp(
                 HomeScreen(
                     modifier = Modifier
                         .fillMaxSize()
-                        .zIndex(if (state.screen == AppScreen.HOME) 1f else 0f),
+                        .zIndex(if (state.screen == AppScreen.HOME) 1f else 0f)
+                        .consumeInputWhenHidden(state.screen != AppScreen.HOME),
                     visible = state.screen == AppScreen.HOME,
                     location = state.homeLocation,
                     rows = state.homeRows,
@@ -73,10 +76,12 @@ fun LocalAudioApp(
                 PlayerScreen(
                     modifier = Modifier
                         .fillMaxSize()
-                        .zIndex(if (state.screen == AppScreen.PLAYER) 1f else 0f),
+                        .zIndex(if (state.screen == AppScreen.PLAYER) 1f else 0f)
+                        .consumeInputWhenHidden(state.screen != AppScreen.PLAYER),
                     visible = state.screen == AppScreen.PLAYER,
                     state = state.playback,
                     seekStepMs = state.settings.seekStepMs,
+                    showAlbumCover = state.settings.showAlbumCover,
                     onPlayPause = togglePlayback,
                     onNext = { dispatchPlayback(PlaybackCommand.Next) },
                     onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
@@ -94,6 +99,7 @@ fun LocalAudioApp(
                         onThemeClick = { onEvent(AppEvent.ShowDialog(AppDialog.Theme)) },
                         onHeaderClick = { onEvent(AppEvent.ShowDialog(AppDialog.Header)) },
                         onSetHomeListBottomUp = { onEvent(AppEvent.UpdateSetting(SettingChange.SetHomeListBottomUp(it))) },
+                        onSetShowAlbumCover = { onEvent(AppEvent.UpdateSetting(SettingChange.SetShowAlbumCover(it))) },
                         onSetShowWhenLocked = { onEvent(AppEvent.UpdateSetting(SettingChange.SetShowWhenLocked(it))) },
                         onSetTimerEnabled = { onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerEnabled(it))) },
                         onSetWaitForCurrentEnd = { onEvent(AppEvent.UpdateSetting(SettingChange.SetWaitForCurrentEnd(it))) },
@@ -132,6 +138,16 @@ fun LocalAudioApp(
         AppDialogs(state = state, onEvent = onEvent)
     }
 }
+
+private fun Modifier.consumeInputWhenHidden(hidden: Boolean): Modifier =
+    pointerInput(hidden) {
+        if (!hidden) return@pointerInput
+        awaitPointerEventScope {
+            while (true) {
+                awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+            }
+        }
+    }
 
 @Composable
 private fun BottomNavigation(screen: AppScreen, onScreenSelected: (AppScreen) -> Unit) {

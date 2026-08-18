@@ -87,7 +87,6 @@ fun HomeScreen(
     onAddFolder: () -> Unit,
 ) {
     val listState = rememberLazyListState()
-    val displayRows = if (listBottomUp) rows.asReversed() else rows
     var headerVisible by remember { mutableStateOf(headerMode != HomeHeaderMode.HIDDEN) }
     var previousIndex by remember { mutableIntStateOf(0) }
     var locateRequest by remember { mutableIntStateOf(0) }
@@ -109,8 +108,7 @@ fun HomeScreen(
             row is HomeRow.Audio && row.item.key == playingKey
         }
         if (index >= 0) {
-            val displayIndex = if (listBottomUp) rows.lastIndex - index else index
-            listState.animateScrollToItem(displayIndex)
+            listState.animateScrollToItem(index)
         }
     }
 
@@ -140,11 +138,13 @@ fun HomeScreen(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    reverseLayout = listBottomUp,
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(
+                        space = 6.dp,
+                        alignment = if (listBottomUp) Alignment.Bottom else Alignment.Top,
+                    ),
                 ) {
-                    items(displayRows, key = { rowKey(it) }) { row ->
+                    items(rows, key = { rowKey(it) }) { row ->
                         when (row) {
                             is HomeRow.Directory -> DirectoryRow(row.location, onDirectoryClick)
                             is HomeRow.Audio -> AudioRow(row.item, playingKey, onAudioClick)
@@ -153,7 +153,6 @@ fun HomeScreen(
                 }
                 HomeScrollbar(
                     listState = listState,
-                    reverseLayout = listBottomUp,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = 4.dp, top = 12.dp, bottom = 12.dp)
@@ -168,7 +167,6 @@ fun HomeScreen(
 @Composable
 private fun HomeScrollbar(
     listState: androidx.compose.foundation.lazy.LazyListState,
-    reverseLayout: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -186,8 +184,7 @@ private fun HomeScrollbar(
         val thumbTravelPx = trackHeightPx * (1f - (currentMetrics?.thumbFraction ?: 1f))
         if (currentMetrics != null && thumbTravelPx > 0f) {
             coroutineScope.launch {
-                val direction = if (reverseLayout) -1f else 1f
-                listState.scrollBy(direction * delta * currentMetrics.scrollRangePx / thumbTravelPx)
+                listState.scrollBy(delta * currentMetrics.scrollRangePx / thumbTravelPx)
             }
         }
     }
@@ -203,11 +200,7 @@ private fun HomeScrollbar(
     ) {
         val currentMetrics = metrics ?: return@Canvas
         val thumbHeight = (size.height * currentMetrics.thumbFraction).coerceAtLeast(1f)
-        val thumbOffset = (size.height - thumbHeight) * if (reverseLayout) {
-            1f - currentMetrics.scrollFraction
-        } else {
-            currentMetrics.scrollFraction
-        }
+        val thumbOffset = (size.height - thumbHeight) * currentMetrics.scrollFraction
         val trackWidth = 4.dp.toPx().coerceAtMost(size.width)
         val thumbWidth = 8.dp.toPx().coerceAtMost(size.width)
 

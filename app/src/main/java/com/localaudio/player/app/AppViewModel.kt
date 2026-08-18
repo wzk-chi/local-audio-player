@@ -157,6 +157,7 @@ class AppViewModel(
             is SettingChange.SetThemeMode -> settingsRepository.updateThemeMode(change.value)
             is SettingChange.SetHomeHeaderMode -> settingsRepository.updateHomeHeaderMode(change.value)
             is SettingChange.SetHomeListBottomUp -> settingsRepository.updateHomeListBottomUp(change.value)
+            is SettingChange.SetShowAlbumCover -> settingsRepository.updateShowAlbumCover(change.value)
             is SettingChange.SetShowWhenLocked -> settingsRepository.updateShowWhenLocked(change.value)
             is SettingChange.SetTimerEnabled -> settingsRepository.updateTimerEnabled(change.value)
             is SettingChange.SetTimerDuration -> settingsRepository.updateTimerDurationMs(change.valueMs)

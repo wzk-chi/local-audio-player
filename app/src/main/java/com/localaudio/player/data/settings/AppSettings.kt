@@ -20,6 +20,7 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val homeHeaderMode: HomeHeaderMode = HomeHeaderMode.FIXED,
     val homeListBottomUp: Boolean = false,
+    val showAlbumCover: Boolean = true,
     val showWhenLocked: Boolean = false,
     val timerEnabled: Boolean = true,
     val timerDurationMs: Long = 30 * 60_000L,

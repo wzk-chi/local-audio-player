@@ -4,6 +4,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,24 +13,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.WavyProgressIndicatorDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.WavyProgressIndicatorDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -37,6 +37,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Shape
@@ -141,17 +142,18 @@ internal fun WavyPlayerSlider(
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isDragged by interactionSource.collectIsDraggedAsState()
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val isInteracting = isDragged || isPressed
+    var isSeeking by remember { mutableStateOf(false) }
+    var renderedValue by remember { mutableFloatStateOf(value.coerceIn(0f, 1f)) }
+    LaunchedEffect(value, isSeeking) {
+        if (!isSeeking) renderedValue = value.coerceIn(0f, 1f)
+    }
     val thumbInteractionFraction by animateFloatAsState(
-        targetValue = if (isInteracting) 1f else 0f,
+        targetValue = if (isSeeking) 1f else 0f,
         animationSpec = tween(250, easing = FastOutSlowInEasing),
         label = "thumbInteraction",
     )
-    val waveFraction by animateFloatAsState(
-        targetValue = if (enabled && isPlaying && !isInteracting) 1f else 0f,
+    val waveAmplitude by animateFloatAsState(
+        targetValue = if (enabled && isPlaying && !isSeeking) 1f else 0f,
         animationSpec = ProgressIndicatorDefaults.ProgressAnimationSpec,
         label = "waveAmplitude",
     )
@@ -166,74 +168,97 @@ internal fun WavyPlayerSlider(
     val thumbLineHeightPx = with(density) { 24.dp.toPx() }
     val trackEdgePaddingPx = with(density) { 8.dp.toPx() }
     val primaryColor = MaterialTheme.colorScheme.primary
+    val trackColor = primaryColor.copy(alpha = 0.2f)
 
     Box(
         modifier = modifier.height(40.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Slider(
-            value = value.coerceIn(0f, 1f),
-            onValueChange = onValueChange,
-            onValueChangeFinished = onValueChangeFinished,
-            valueRange = 0f..1f,
-            enabled = enabled,
-            interactionSource = interactionSource,
-            colors = SliderDefaults.colors(
-                thumbColor = Color.Transparent,
-                activeTrackColor = Color.Transparent,
-                inactiveTrackColor = Color.Transparent,
-                activeTickColor = Color.Transparent,
-                inactiveTickColor = Color.Transparent,
-                disabledThumbColor = Color.Transparent,
-                disabledActiveTrackColor = Color.Transparent,
-                disabledInactiveTrackColor = Color.Transparent,
-            ),
-            modifier = Modifier.fillMaxWidth(),
+        LinearWavyProgressIndicator(
+            progress = { renderedValue },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            color = primaryColor,
+            trackColor = trackColor,
+            stroke = trackStroke,
+            trackStroke = trackStroke,
+            gapSize = 12.dp * (1f + 0.1573f * waveAmplitude * waveAmplitude),
+            stopSize = 3.dp,
+            amplitude = { progress -> if (progress > 0f) waveAmplitude else 0f },
+            wavelength = WavyProgressIndicatorDefaults.LinearDeterminateWavelength,
+            waveSpeed = WavyProgressIndicatorDefaults.LinearDeterminateWavelength / 2f,
         )
-        if (enabled && isPlaying) {
-            LinearWavyProgressIndicator(
-                progress = { value.coerceIn(0f, 1f) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                color = primaryColor,
-                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                stroke = trackStroke,
-                trackStroke = trackStroke,
-                gapSize = 12.dp * (1f + 0.1573f * waveFraction * waveFraction),
-                stopSize = 3.dp,
-                amplitude = { progress -> if (progress > 0f) waveFraction else 0f },
-                wavelength = WavyProgressIndicatorDefaults.LinearDeterminateWavelength,
-                waveSpeed = WavyProgressIndicatorDefaults.LinearDeterminateWavelength / 2f,
-            )
-        } else {
-            LinearProgressIndicator(
-                progress = { value.coerceIn(0f, 1f) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
-                    .height(5.dp),
-                color = primaryColor,
-                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-            )
-        }
         Canvas(modifier = Modifier.fillMaxSize()) {
             val trackStart = trackEdgePaddingPx
             val trackEnd = size.width - trackEdgePaddingPx
-            val thumbX = trackStart + (trackEnd - trackStart) * value.coerceIn(0f, 1f)
+            val trackCenterY = size.height / 2f
+            val thumbX = trackStart + (trackEnd - trackStart) * renderedValue
             val thumbWidth = thumbRadiusPx * 2f * (1f - thumbInteractionFraction) +
                 trackStroke.width * 1.2f * thumbInteractionFraction
             val thumbHeight = thumbRadiusPx * 2f * (1f - thumbInteractionFraction) +
                 thumbLineHeightPx * thumbInteractionFraction
             val centerX = thumbX.coerceIn(thumbWidth / 2f, size.width - thumbWidth / 2f)
-            val centerY = size.height / 2f
+            val thumbCenterY = size.height / 2f
 
             drawRoundRect(
                 color = primaryColor,
-                topLeft = Offset(centerX - thumbWidth / 2f, centerY - thumbHeight / 2f),
+                topLeft = Offset(centerX - thumbWidth / 2f, thumbCenterY - thumbHeight / 2f),
                 size = Size(thumbWidth, thumbHeight),
                 cornerRadius = CornerRadius(thumbWidth / 2f),
             )
         }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(enabled, trackEdgePaddingPx) {
+                    if (!enabled) return@pointerInput
+
+                    fun valueForX(rawX: Float): Float {
+                        val edgePadding = trackEdgePaddingPx.coerceIn(0f, size.width / 2f)
+                        val trackWidth = (size.width - edgePadding * 2f).coerceAtLeast(1f)
+                        return ((rawX - edgePadding) / trackWidth).coerceIn(0f, 1f)
+                    }
+
+                    awaitEachGesture {
+                        var seekValue: Float? = null
+                        var finished = false
+                        try {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            isSeeking = true
+                            down.consume()
+                            var latestValue = valueForX(down.position.x)
+                            seekValue = latestValue
+                            renderedValue = latestValue
+                            onValueChange(latestValue)
+
+                            var pointerId = down.id
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == pointerId }
+                                    ?: event.changes.firstOrNull { it.pressed }
+                                    ?: break
+                                pointerId = change.id
+                                if (!change.pressed) {
+                                    change.consume()
+                                    break
+                                }
+                                if (change.position != change.previousPosition) {
+                                    change.consume()
+                                    latestValue = valueForX(change.position.x)
+                                    seekValue = latestValue
+                                    renderedValue = latestValue
+                                    onValueChange(latestValue)
+                                }
+                            }
+                            finished = true
+                            onValueChangeFinished()
+                        } finally {
+                            isSeeking = false
+                            if (!finished && seekValue != null) onValueChangeFinished()
+                        }
+                    }
+                },
+        )
     }
 }

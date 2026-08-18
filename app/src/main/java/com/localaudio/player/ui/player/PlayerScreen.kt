@@ -1,6 +1,11 @@
 package com.localaudio.player.ui.player
 
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,12 +42,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -55,6 +65,8 @@ import com.localaudio.player.ui.components.PlayerAction
 import com.localaudio.player.ui.components.PlayerTransportSegment
 import com.localaudio.player.ui.components.WavyPlayerSlider
 import com.localaudio.player.ui.util.formatTime
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 @Composable
 fun PlayerScreen(
@@ -62,6 +74,7 @@ fun PlayerScreen(
     visible: Boolean = true,
     state: PlaybackState,
     seekStepMs: Long,
+    showAlbumCover: Boolean,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -88,23 +101,28 @@ fun PlayerScreen(
             .padding(horizontal = 20.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(modifier = Modifier.weight(1f))
-        CoverPlaceholder(modifier = Modifier.size(220.dp))
-        Spacer(modifier = Modifier.height(14.dp))
-        SwipeableTrackLabel(
-            title = state.currentItem?.title ?: "还没有播放内容\n请到首页选择歌曲",
-            onNext = onNext,
-            onPrevious = onPrevious,
+        Spacer(modifier = Modifier.weight(0.25f))
+        if (showAlbumCover) {
+            CoverPlaceholder(
+                onNext = onNext,
+                onPrevious = onPrevious,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .weight(1.75f, fill = false),
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+        AutoScrollableTrackTitle(
+            title = state.currentItem?.title ?: "还没有播放内容，请到首页选择歌曲",
             textStyle = MaterialTheme.typography.headlineSmall,
             textColor = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(120.dp),
-            textAlign = TextAlign.Center,
-            maxLines = 3,
+                .height(56.dp),
             horizontalPadding = 8.dp,
         )
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         val segmentStartShape = RoundedCornerShape(
             topStart = 60.dp,
             bottomStart = 60.dp,
@@ -119,7 +137,10 @@ fun PlayerScreen(
         )
         val segmentInnerShape = RoundedCornerShape(8.dp)
         Box(
-            modifier = Modifier.fillMaxWidth().height(48.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .offset(y = (-6).dp),
             contentAlignment = Alignment.Center,
         ) {
             WavyPlayerSlider(
@@ -139,7 +160,7 @@ fun PlayerScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .offset(y = (-4).dp),
+                .offset(y = (-6).dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
@@ -255,9 +276,79 @@ fun PlayerScreen(
 }
 
 @Composable
-private fun CoverPlaceholder(modifier: Modifier = Modifier) {
+private fun CoverPlaceholder(
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+    val swipeThreshold = with(density) { 56.dp.toPx() }
+    val touchSlop = with(density) { 8.dp.toPx() }
+    var coverTranslationX by remember { mutableFloatStateOf(0f) }
+    var widthPx by remember { mutableFloatStateOf(0f) }
+    var settling by remember { mutableStateOf(false) }
+    val animationScope = rememberCoroutineScope()
     Surface(
-        modifier = modifier,
+        modifier = modifier
+            .graphicsLayer { translationX = coverTranslationX }
+            .onSizeChanged { widthPx = it.width.toFloat() }
+            .pointerInput(swipeThreshold, touchSlop, widthPx) {
+                if (widthPx <= 0f) return@pointerInput
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                if (settling) {
+                    while (awaitPointerEvent().changes.any { it.pressed }) Unit
+                    return@awaitEachGesture
+                }
+                var horizontalDrag = 0f
+                var dragging = false
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    horizontalDrag += change.positionChange().x
+                    if (!dragging && abs(horizontalDrag) > touchSlop) dragging = true
+                    if (dragging) {
+                        change.consume()
+                        coverTranslationX = horizontalDrag.coerceIn(-widthPx, widthPx)
+                    }
+                    if (!change.pressed) break
+                }
+                val direction = when {
+                    horizontalDrag <= -swipeThreshold -> -1
+                    horizontalDrag >= swipeThreshold -> 1
+                    else -> 0
+                }
+                val releasedTranslation = coverTranslationX
+                settling = true
+                animationScope.launch {
+                    try {
+                        if (direction == 0) {
+                            animate(
+                                initialValue = releasedTranslation,
+                                targetValue = 0f,
+                                animationSpec = tween(180),
+                            ) { value, _ -> coverTranslationX = value }
+                        } else {
+                            val target = direction * widthPx
+                            animate(
+                                initialValue = releasedTranslation,
+                                targetValue = target,
+                                animationSpec = tween(180),
+                            ) { value, _ -> coverTranslationX = value }
+                            if (direction < 0) onNext() else onPrevious()
+                            coverTranslationX = -target
+                            animate(
+                                initialValue = coverTranslationX,
+                                targetValue = 0f,
+                                animationSpec = tween(180),
+                            ) { value, _ -> coverTranslationX = value }
+                        }
+                    } finally {
+                        settling = false
+                    }
+                }
+            }
+        },
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.primaryContainer,
     ) {
@@ -273,6 +364,36 @@ private fun CoverPlaceholder(modifier: Modifier = Modifier) {
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
             )
         }
+    }
+}
+
+@Composable
+private fun AutoScrollableTrackTitle(
+    title: String,
+    textStyle: androidx.compose.ui.text.TextStyle,
+    textColor: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier,
+    horizontalPadding: androidx.compose.ui.unit.Dp = 0.dp,
+) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = title,
+            modifier = Modifier
+                .basicMarquee(
+                    iterations = Int.MAX_VALUE,
+                    initialDelayMillis = 1_000,
+                    velocity = 50.dp,
+                )
+                .padding(horizontal = horizontalPadding),
+            maxLines = 1,
+            softWrap = false,
+            style = textStyle,
+            color = textColor,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
