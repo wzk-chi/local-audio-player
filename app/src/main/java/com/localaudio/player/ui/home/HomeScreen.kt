@@ -57,9 +57,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.localaudio.player.R
 import com.localaudio.player.app.HomeRow
 import com.localaudio.player.data.model.AudioItem
 import com.localaudio.player.data.model.FolderLocation
@@ -75,7 +77,7 @@ fun HomeScreen(
     rows: List<HomeRow>,
     playingKey: String?,
     headerMode: HomeHeaderMode,
-    listBottomUp: Boolean,
+    listBottomAligned: Boolean,
     onBack: () -> Unit,
     onLocateCurrent: () -> Unit,
     onDirectoryClick: (FolderLocation) -> Unit,
@@ -98,7 +100,7 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(locateRequest, rows, playingKey, listBottomUp) {
+    LaunchedEffect(locateRequest, rows, playingKey, listBottomAligned) {
         if (locateRequest == 0 || playingKey == null) return@LaunchedEffect
         val index = rows.indexOfFirst { row ->
             row is HomeRow.Audio && row.item.key == playingKey
@@ -132,7 +134,7 @@ fun HomeScreen(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(
                         space = 6.dp,
-                        alignment = if (listBottomUp) Alignment.Bottom else Alignment.Top,
+                        alignment = if (listBottomAligned) Alignment.Bottom else Alignment.Top,
                     ),
                 ) {
                     items(rows, key = { rowKey(it) }) { row ->
@@ -253,7 +255,7 @@ private fun HomeHeader(
     TopAppBar(
         title = {
             Text(
-                text = location?.name ?: "首页",
+                text = location?.name ?: stringResource(R.string.home_title),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -261,7 +263,7 @@ private fun HomeHeader(
         navigationIcon = {
             if (location != null) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回上一层")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.home_back))
                 }
             }
         },
@@ -270,7 +272,7 @@ private fun HomeHeader(
                 onClick = onLocateCurrent,
                 enabled = playingKey != null,
             ) {
-                Icon(Icons.Filled.MyLocation, contentDescription = "定位当前播放")
+                Icon(Icons.Filled.MyLocation, contentDescription = stringResource(R.string.home_locate_current))
             }
         },
     )
@@ -284,7 +286,7 @@ private fun DirectoryRow(location: FolderLocation, onClick: (FolderLocation) -> 
             .clip(MaterialTheme.shapes.large)
             .clickable { onClick(location) },
         headlineContent = { Text(location.name) },
-        supportingContent = { Text("文件夹") },
+        supportingContent = { Text(stringResource(R.string.home_folder)) },
         leadingContent = {
             Icon(Icons.Filled.Folder, contentDescription = null)
         },
@@ -348,10 +350,10 @@ private fun EmptyHome(inDirectory: Boolean, onAddFolder: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
-                text = if (inDirectory) "此文件夹为空" else "还没有音乐文件夹",
+                text = stringResource(if (inDirectory) R.string.home_empty_folder else R.string.home_empty_library),
                 style = MaterialTheme.typography.titleMedium,
             )
-            if (!inDirectory) Button(onClick = onAddFolder) { Text("添加文件夹") }
+            if (!inDirectory) Button(onClick = onAddFolder) { Text(stringResource(R.string.home_add_folder)) }
         }
     }
 }

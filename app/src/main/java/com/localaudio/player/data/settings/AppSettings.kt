@@ -19,7 +19,7 @@ val DEFAULT_TIMER_DURATIONS_MS = listOf(
 data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val homeHeaderMode: HomeHeaderMode = HomeHeaderMode.FIXED,
-    val homeListBottomUp: Boolean = false,
+    val homeListBottomAligned: Boolean = false,
     val showAlbumCover: Boolean = true,
     val showWhenLocked: Boolean = false,
     val timerEnabled: Boolean = true,

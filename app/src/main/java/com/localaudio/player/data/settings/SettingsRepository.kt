@@ -22,8 +22,8 @@ class SettingsRepository(context: Context) {
     fun updateHomeHeaderMode(value: HomeHeaderMode) =
         updateString(KEY_HEADER, value.name) { it.copy(homeHeaderMode = value) }
 
-    fun updateHomeListBottomUp(value: Boolean) =
-        updateBoolean(KEY_HOME_LIST_BOTTOM_UP, value) { it.copy(homeListBottomUp = value) }
+    fun updateHomeListBottomAligned(value: Boolean) =
+        updateBoolean(KEY_HOME_LIST_BOTTOM_UP, value) { it.copy(homeListBottomAligned = value) }
 
     fun updateShowAlbumCover(value: Boolean) =
         updateBoolean(KEY_SHOW_ALBUM_COVER, value) { it.copy(showAlbumCover = value) }
@@ -143,7 +143,7 @@ class SettingsRepository(context: Context) {
                 preferences.getString(KEY_HEADER, null),
                 HomeHeaderMode.FIXED,
             ),
-            homeListBottomUp = preferences.getBoolean(KEY_HOME_LIST_BOTTOM_UP, false),
+            homeListBottomAligned = preferences.getBoolean(KEY_HOME_LIST_BOTTOM_UP, false),
             showAlbumCover = preferences.getBoolean(KEY_SHOW_ALBUM_COVER, true),
             showWhenLocked = preferences.getBoolean(KEY_SHOW_WHEN_LOCKED, false),
             timerEnabled = preferences.getBoolean(KEY_TIMER_ENABLED, true),

@@ -21,6 +21,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.localaudio.player.R
 import com.localaudio.player.app.AppDialog
 import com.localaudio.player.app.AppEvent
 import com.localaudio.player.app.AppScreen
@@ -60,7 +62,7 @@ fun LocalAudioApp(
                         rows = state.homeRows,
                         playingKey = state.playback.currentItem?.key,
                         headerMode = state.settings.homeHeaderMode,
-                        listBottomUp = state.settings.homeListBottomUp,
+                        listBottomAligned = state.settings.homeListBottomAligned,
                         onBack = { onEvent(AppEvent.Back) },
                         onLocateCurrent = { onEvent(AppEvent.LocateCurrent) },
                         onDirectoryClick = { onEvent(AppEvent.OpenDirectory(it)) },
@@ -86,7 +88,9 @@ fun LocalAudioApp(
                         folderCount = state.library.folders.size,
                         onThemeClick = { onEvent(AppEvent.ShowDialog(AppDialog.Theme)) },
                         onHeaderClick = { onEvent(AppEvent.ShowDialog(AppDialog.Header)) },
-                        onSetHomeListBottomUp = { onEvent(AppEvent.UpdateSetting(SettingChange.SetHomeListBottomUp(it))) },
+                        onSetHomeListBottomAligned = {
+                            onEvent(AppEvent.UpdateSetting(SettingChange.SetHomeListBottomAligned(it)))
+                        },
                         onSetShowAlbumCover = { onEvent(AppEvent.UpdateSetting(SettingChange.SetShowAlbumCover(it))) },
                         onSetShowWhenLocked = { onEvent(AppEvent.UpdateSetting(SettingChange.SetShowWhenLocked(it))) },
                         onSetTimerEnabled = { onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerEnabled(it))) },
@@ -144,22 +148,22 @@ private fun BottomNavigation(screen: AppScreen, onScreenSelected: (AppScreen) ->
         NavigationBarItem(
             selected = screen == AppScreen.HOME,
             onClick = { onScreenSelected(AppScreen.HOME) },
-            icon = { Icon(Icons.Filled.Home, contentDescription = "首页") },
-            label = { Text("首页") },
+            icon = { Icon(Icons.Filled.Home, contentDescription = stringResource(R.string.nav_home)) },
+            label = { Text(stringResource(R.string.nav_home)) },
             colors = itemColors,
         )
         NavigationBarItem(
             selected = screen == AppScreen.PLAYER,
             onClick = { onScreenSelected(AppScreen.PLAYER) },
-            icon = { Icon(Icons.Filled.PlayArrow, contentDescription = "播放") },
-            label = { Text("播放") },
+            icon = { Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(R.string.nav_player)) },
+            label = { Text(stringResource(R.string.nav_player)) },
             colors = itemColors,
         )
         NavigationBarItem(
             selected = screen == AppScreen.SETTINGS || screen == AppScreen.LIBRARY_SETTINGS,
             onClick = { onScreenSelected(AppScreen.SETTINGS) },
-            icon = { Icon(Icons.Filled.Settings, contentDescription = "设置") },
-            label = { Text("设置") },
+            icon = { Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.nav_settings)) },
+            label = { Text(stringResource(R.string.nav_settings)) },
             colors = itemColors,
         )
     }

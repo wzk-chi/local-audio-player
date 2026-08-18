@@ -43,6 +43,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,9 +54,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.localaudio.player.R
 import com.localaudio.player.data.settings.REPEAT_ALL
 import com.localaudio.player.data.settings.REPEAT_ONE
 import com.localaudio.player.playback.PlaybackState
@@ -107,7 +110,7 @@ fun PlayerScreen(
             Spacer(modifier = Modifier.height(14.dp))
         }
         AutoScrollableTrackTitle(
-            title = state.currentItem?.title ?: "还没有播放内容，请到首页选择歌曲",
+            title = state.currentItem?.title ?: stringResource(R.string.player_empty),
             textStyle = MaterialTheme.typography.headlineSmall,
             textColor = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
@@ -184,21 +187,23 @@ fun PlayerScreen(
             ) {
                 PlayerTransportSegment(
                     icon = Icons.Filled.FastRewind,
-                    contentDescription = "快退",
+                    contentDescription = stringResource(R.string.player_seek_back),
                     onClick = { onSeekBy(-seekStepMs) },
                     shape = segmentStartShape,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
                 PlayerTransportSegment(
                     icon = Icons.Filled.SkipPrevious,
-                    contentDescription = "上一曲",
+                    contentDescription = stringResource(R.string.player_previous),
                     onClick = onPrevious,
                     shape = segmentInnerShape,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
                 PlayerTransportSegment(
                     icon = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = if (state.isPlaying) "暂停" else "播放",
+                    contentDescription = stringResource(
+                        if (state.isPlaying) R.string.player_pause else R.string.player_play,
+                    ),
                     onClick = onPlayPause,
                     shape = segmentInnerShape,
                     enabled = state.currentItem != null,
@@ -208,14 +213,14 @@ fun PlayerScreen(
                 )
                 PlayerTransportSegment(
                     icon = Icons.Filled.SkipNext,
-                    contentDescription = "下一曲",
+                    contentDescription = stringResource(R.string.player_next),
                     onClick = onNext,
                     shape = segmentInnerShape,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
                 PlayerTransportSegment(
                     icon = Icons.Filled.FastForward,
-                    contentDescription = "快进",
+                    contentDescription = stringResource(R.string.player_seek_forward),
                     onClick = { onSeekBy(seekStepMs) },
                     shape = segmentEndShape,
                     modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -259,7 +264,7 @@ fun PlayerScreen(
             )
             PlayerAction(
                 icon = Icons.AutoMirrored.Filled.QueueMusic,
-                label = "列表",
+                label = stringResource(R.string.player_queue),
                 onClick = onOpenQueue,
                 shape = actionEndShape,
                 modifier = Modifier.size(width = 76.dp, height = 52.dp),
@@ -280,6 +285,9 @@ private fun CoverPlaceholder(
     var coverTranslationX by remember { mutableFloatStateOf(0f) }
     var widthPx by remember { mutableFloatStateOf(0f) }
     var settling by remember { mutableStateOf(false) }
+    val latestSettling = rememberUpdatedState(settling)
+    val latestOnNext = rememberUpdatedState(onNext)
+    val latestOnPrevious = rememberUpdatedState(onPrevious)
     val animationScope = rememberCoroutineScope()
     Surface(
         modifier = modifier
@@ -289,7 +297,7 @@ private fun CoverPlaceholder(
                 if (widthPx <= 0f) return@pointerInput
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
-                if (settling) {
+                if (latestSettling.value) {
                     while (awaitPointerEvent().changes.any { it.pressed }) Unit
                     return@awaitEachGesture
                 }
@@ -328,7 +336,7 @@ private fun CoverPlaceholder(
                                 targetValue = target,
                                 animationSpec = tween(180),
                             ) { value, _ -> coverTranslationX = value }
-                            if (direction < 0) onNext() else onPrevious()
+                            if (direction < 0) latestOnNext.value() else latestOnPrevious.value()
                             coverTranslationX = -target
                             animate(
                                 initialValue = coverTranslationX,
@@ -390,11 +398,12 @@ private fun AutoScrollableTrackTitle(
     }
 }
 
+@Composable
 private fun playModeLabel(state: PlaybackState): String = when {
-    state.shuffleEnabled -> "随机"
-    state.repeatMode == REPEAT_ONE -> "单曲循环"
-    state.repeatMode == REPEAT_ALL -> "列表循环"
-    else -> "顺序"
+    state.shuffleEnabled -> stringResource(R.string.player_mode_shuffle)
+    state.repeatMode == REPEAT_ONE -> stringResource(R.string.player_mode_repeat_one)
+    state.repeatMode == REPEAT_ALL -> stringResource(R.string.player_mode_repeat_all)
+    else -> stringResource(R.string.player_mode_sequential)
 }
 
 private fun playModeIcon(state: PlaybackState): ImageVector = when {
@@ -404,11 +413,12 @@ private fun playModeIcon(state: PlaybackState): ImageVector = when {
     else -> Icons.AutoMirrored.Filled.PlaylistPlay
 }
 
+@Composable
 private fun timerLabel(state: PlaybackState): String = when {
-    state.timerWaitingForEnd -> "播完暂停"
+    state.timerWaitingForEnd -> stringResource(R.string.player_timer_waiting)
     state.timerActive -> {
         val minutes = (state.timerRemainingMs / 60_000L).coerceAtLeast(0L)
-        if (minutes > 999L) "999+" else "${minutes}分钟"
+        if (minutes > 999L) "999+" else stringResource(R.string.player_timer_minutes, minutes)
     }
-    else -> "定时"
+    else -> stringResource(R.string.player_timer)
 }

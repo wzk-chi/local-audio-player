@@ -34,7 +34,7 @@ fun SettingsScreen(
     folderCount: Int,
     onThemeClick: () -> Unit,
     onHeaderClick: () -> Unit,
-    onSetHomeListBottomUp: (Boolean) -> Unit,
+    onSetHomeListBottomAligned: (Boolean) -> Unit,
     onSetShowAlbumCover: (Boolean) -> Unit,
     onSetShowWhenLocked: (Boolean) -> Unit,
     onSetTimerEnabled: (Boolean) -> Unit,
@@ -44,30 +44,30 @@ fun SettingsScreen(
     onOpenLibrary: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(title = { Text("设置") })
+        TopAppBar(title = { Text(stringResource(R.string.settings_title)) })
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             item {
-                SettingsSection("外观") {
+                SettingsSection(stringResource(R.string.settings_appearance)) {
                     SettingChoiceRow(
-                        title = "主题模式",
+                        title = stringResource(R.string.settings_theme),
                         value = themeLabel(settings.themeMode),
                         onClick = onThemeClick,
                     )
                     SettingsDivider()
                     SettingChoiceRow(
-                        title = "首页顶栏",
+                        title = stringResource(R.string.settings_home_header),
                         value = headerLabel(settings.homeHeaderMode),
                         onClick = onHeaderClick,
                     )
                     SettingsDivider()
                     SettingSwitchRow(
                         title = stringResource(R.string.settings_home_list_bottom_aligned),
-                        checked = settings.homeListBottomUp,
-                        onCheckedChange = onSetHomeListBottomUp,
+                        checked = settings.homeListBottomAligned,
+                        onCheckedChange = onSetHomeListBottomAligned,
                     )
                     SettingsDivider()
                     SettingSwitchRow(
@@ -77,47 +77,51 @@ fun SettingsScreen(
                     )
                     SettingsDivider()
                     SettingSwitchRow(
-                        title = "锁屏上方显示",
+                        title = stringResource(R.string.settings_show_when_locked),
                         checked = settings.showWhenLocked,
                         onCheckedChange = onSetShowWhenLocked,
                     )
                 }
             }
             item {
-                SettingsSection("播放") {
+                SettingsSection(stringResource(R.string.settings_playback)) {
                     SettingChoiceRow(
-                        title = "快进 / 快退跨度",
-                        value = "${settings.seekStepMs / 1000L} 秒",
+                        title = stringResource(R.string.settings_seek_step),
+                        value = stringResource(R.string.settings_seconds, settings.seekStepMs / 1000L),
                         onClick = onSeekStepClick,
                     )
                 }
             }
             item {
-                SettingsSection("定时暂停") {
+                SettingsSection(stringResource(R.string.settings_sleep_timer)) {
                     SettingSwitchRow(
-                        title = "自动定时",
+                        title = stringResource(R.string.settings_auto_timer),
                         checked = settings.timerEnabled,
                         onCheckedChange = onSetTimerEnabled,
                     )
                     SettingsDivider()
                     SettingSwitchRow(
-                        title = "播放完当前音频后暂停",
+                        title = stringResource(R.string.settings_wait_for_end),
                         checked = settings.waitForCurrentEnd,
                         onCheckedChange = onSetWaitForCurrentEnd,
                     )
                     SettingsDivider()
                     SettingChoiceRow(
-                        title = "自动定时时长",
+                        title = stringResource(R.string.settings_auto_timer_duration),
                         value = durationLabel(settings.timerDurationMs),
                         onClick = onTimerDurationClick,
                     )
                 }
             }
             item {
-                SettingsSection("音乐库") {
+                SettingsSection(stringResource(R.string.settings_library)) {
                     SettingChoiceRow(
-                        title = "音乐库",
-                        value = if (folderCount == 0) "尚未添加文件夹" else "$folderCount 个文件夹",
+                        title = stringResource(R.string.settings_library),
+                        value = if (folderCount == 0) {
+                            stringResource(R.string.settings_no_folders)
+                        } else {
+                            stringResource(R.string.settings_folder_count, folderCount)
+                        },
                         onClick = onOpenLibrary,
                     )
                 }
@@ -158,14 +162,16 @@ private fun SettingsDivider() {
     )
 }
 
+@Composable
 private fun themeLabel(mode: ThemeMode): String = when (mode) {
-    ThemeMode.LIGHT -> "浅色"
-    ThemeMode.DARK -> "深色"
-    else -> "跟随系统"
+    ThemeMode.LIGHT -> stringResource(R.string.theme_light)
+    ThemeMode.DARK -> stringResource(R.string.theme_dark)
+    else -> stringResource(R.string.theme_system)
 }
 
+@Composable
 private fun headerLabel(mode: HomeHeaderMode): String = when (mode) {
-    HomeHeaderMode.HIDDEN -> "隐藏"
-    HomeHeaderMode.AUTO -> "自动隐藏"
-    else -> "固定"
+    HomeHeaderMode.HIDDEN -> stringResource(R.string.header_hidden)
+    HomeHeaderMode.AUTO -> stringResource(R.string.header_auto)
+    else -> stringResource(R.string.header_fixed)
 }

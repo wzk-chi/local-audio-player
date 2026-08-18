@@ -27,6 +27,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.localaudio.player.R
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -61,10 +63,13 @@ internal fun SwipeableTrackLabel(
     val latestOnNext = rememberUpdatedState(onNext)
     val latestOnPrevious = rememberUpdatedState(onPrevious)
     val latestTitle = rememberUpdatedState(title)
+    val previousLabel = stringResource(R.string.player_previous)
+    val nextLabel = stringResource(R.string.player_next)
     var displayedTitle by remember { mutableStateOf(title) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
     var contentWidth by remember { mutableFloatStateOf(0f) }
     var settling by remember { mutableStateOf(false) }
+    val latestSettling = rememberUpdatedState(settling)
     val dragThreshold = with(density) { 56.dp.toPx() }
     val touchSlop = with(density) { 8.dp.toPx() }
     val maxOffset = contentWidth.coerceAtLeast(180f)
@@ -85,11 +90,11 @@ internal fun SwipeableTrackLabel(
                     }
                 }
                 customActions = listOf(
-                    CustomAccessibilityAction(label = "上一首") {
+                    CustomAccessibilityAction(label = previousLabel) {
                         latestOnPrevious.value()
                         true
                     },
-                    CustomAccessibilityAction(label = "下一首") {
+                    CustomAccessibilityAction(label = nextLabel) {
                         latestOnNext.value()
                         true
                     },
@@ -98,7 +103,7 @@ internal fun SwipeableTrackLabel(
             .pointerInput(maxOffset) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
-                    if (settling) {
+                    if (latestSettling.value) {
                         while (awaitPointerEvent().changes.any { it.pressed }) Unit
                         return@awaitEachGesture
                     }

@@ -36,6 +36,7 @@ class MediaScanner(private val context: Context) {
         var scanned = 0
 
         fun walk(documentId: String, depth: Int, relativePath: String) {
+            checkInterrupted()
             if (depth > MAX_DEPTH) return
             val children = DocumentsContract.buildChildDocumentsUriUsingTree(folderUri, documentId)
             val cursor = resolver.query(children, PROJECTION, null, null, null)
@@ -45,6 +46,7 @@ class MediaScanner(private val context: Context) {
                 val nameColumn = c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
                 val mimeColumn = c.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
                 while (c.moveToNext()) {
+                    checkInterrupted()
                     val id = c.getString(idColumn) ?: continue
                     if (!visited.add(id)) continue
                     val name = c.getString(nameColumn) ?: continue
@@ -78,6 +80,7 @@ class MediaScanner(private val context: Context) {
             walk(treeId, 0, "")
             if (pending.isNotEmpty()) onItems(pending.toList())
             val result = found.distinctBy { it.key }.map { item ->
+                checkInterrupted()
                 item.copy(durationMs = readDuration(retriever, item.uri))
             }
             onProgress(scanned, result.size)
@@ -90,6 +93,10 @@ class MediaScanner(private val context: Context) {
     private fun isAudio(mime: String, name: String): Boolean {
         if (mime.startsWith("audio/", ignoreCase = true)) return true
         return name.substringAfterLast('.', "").lowercase(Locale.ROOT) in AUDIO_EXTENSIONS
+    }
+
+    private fun checkInterrupted() {
+        if (Thread.currentThread().isInterrupted) throw InterruptedException()
     }
 
     private fun readDuration(retriever: MediaMetadataRetriever, uri: Uri): Long = try {

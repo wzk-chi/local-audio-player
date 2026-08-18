@@ -17,8 +17,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.localaudio.player.R
 import com.localaudio.player.playback.PlaybackState
 
 @Composable
@@ -40,7 +42,7 @@ fun PlaybackBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SwipeableTrackLabel(
-                title = state.currentItem?.title ?: "未播放",
+                title = state.currentItem?.title ?: stringResource(R.string.player_not_playing),
                 onNext = onNext,
                 onPrevious = onPrevious,
                 textStyle = MaterialTheme.typography.bodyMedium,
@@ -65,7 +67,9 @@ fun PlaybackBar(
                 ) {
                     Icon(
                         imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = if (state.isPlaying) "暂停" else "播放",
+                        contentDescription = stringResource(
+                            if (state.isPlaying) R.string.player_pause else R.string.player_play,
+                        ),
                         modifier = Modifier.size(24.dp),
                     )
                 }

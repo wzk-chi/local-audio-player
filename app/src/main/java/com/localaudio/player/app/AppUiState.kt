@@ -36,7 +36,7 @@ data class AppUiState(
 sealed interface SettingChange {
     data class SetThemeMode(val value: ThemeMode) : SettingChange
     data class SetHomeHeaderMode(val value: HomeHeaderMode) : SettingChange
-    data class SetHomeListBottomUp(val value: Boolean) : SettingChange
+    data class SetHomeListBottomAligned(val value: Boolean) : SettingChange
     data class SetShowAlbumCover(val value: Boolean) : SettingChange
     data class SetShowWhenLocked(val value: Boolean) : SettingChange
     data class SetTimerEnabled(val value: Boolean) : SettingChange

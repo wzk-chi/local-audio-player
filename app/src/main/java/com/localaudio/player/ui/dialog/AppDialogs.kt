@@ -33,11 +33,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.localaudio.player.R
 import com.localaudio.player.app.AppDialog
 import com.localaudio.player.app.AppEvent
 import com.localaudio.player.app.AppUiState
@@ -96,11 +98,11 @@ internal fun AppDialogs(
             onDismiss = { onEvent(AppEvent.DismissDialog) },
         )
         AppDialog.Theme -> ChoiceDialog(
-            title = "主题模式",
+            title = stringResource(R.string.settings_theme),
             options = listOf(
-                ChoiceOption("跟随系统", ThemeMode.SYSTEM),
-                ChoiceOption("浅色", ThemeMode.LIGHT),
-                ChoiceOption("深色", ThemeMode.DARK),
+                ChoiceOption(stringResource(R.string.theme_system), ThemeMode.SYSTEM),
+                ChoiceOption(stringResource(R.string.theme_light), ThemeMode.LIGHT),
+                ChoiceOption(stringResource(R.string.theme_dark), ThemeMode.DARK),
             ),
             selected = state.settings.themeMode,
             onSelect = { mode ->
@@ -114,11 +116,11 @@ internal fun AppDialogs(
             onDismiss = { onEvent(AppEvent.DismissDialog) },
         )
         AppDialog.Header -> ChoiceDialog(
-            title = "首页顶栏",
+            title = stringResource(R.string.settings_home_header),
             options = listOf(
-                ChoiceOption("固定", HomeHeaderMode.FIXED),
-                ChoiceOption("隐藏", HomeHeaderMode.HIDDEN),
-                ChoiceOption("自动隐藏", HomeHeaderMode.AUTO),
+                ChoiceOption(stringResource(R.string.header_fixed), HomeHeaderMode.FIXED),
+                ChoiceOption(stringResource(R.string.header_hidden), HomeHeaderMode.HIDDEN),
+                ChoiceOption(stringResource(R.string.header_auto), HomeHeaderMode.AUTO),
             ),
             selected = state.settings.homeHeaderMode,
             onSelect = { mode ->
@@ -174,7 +176,7 @@ private fun QueueDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("播放列表") },
+        title = { Text(stringResource(R.string.dialog_queue)) },
         text = {
             LazyColumn(
                 state = listState,
@@ -211,7 +213,7 @@ private fun QueueDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_close)) } },
     )
 }
 
@@ -222,10 +224,10 @@ private fun ModeDialog(
     onDismiss: () -> Unit,
 ) {
     val options = listOf(
-        ChoiceOption("顺序", PlayMode(REPEAT_OFF, false)),
-        ChoiceOption("单曲循环", PlayMode(REPEAT_ONE, false)),
-        ChoiceOption("列表循环", PlayMode(REPEAT_ALL, false)),
-        ChoiceOption("随机", PlayMode(REPEAT_OFF, true)),
+        ChoiceOption(stringResource(R.string.dialog_mode_order), PlayMode(REPEAT_OFF, false)),
+        ChoiceOption(stringResource(R.string.dialog_mode_repeat_one), PlayMode(REPEAT_ONE, false)),
+        ChoiceOption(stringResource(R.string.dialog_mode_repeat_all), PlayMode(REPEAT_ALL, false)),
+        ChoiceOption(stringResource(R.string.dialog_mode_shuffle), PlayMode(REPEAT_OFF, true)),
     )
     val selected = when {
         state.shuffleEnabled -> PlayMode(REPEAT_OFF, true)
@@ -234,7 +236,7 @@ private fun ModeDialog(
         else -> PlayMode(REPEAT_OFF, false)
     }
     ChoiceDialog(
-        title = "播放顺序",
+        title = stringResource(R.string.dialog_play_order),
         options = options,
         selected = selected,
         onSelect = { onSelect(it.repeatMode, it.shuffleEnabled) },
@@ -254,11 +256,11 @@ private fun TimerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("定时暂停") },
+        title = { Text(stringResource(R.string.dialog_timer)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SettingSwitchRow(
-                    title = "自动定时",
+                    title = stringResource(R.string.settings_auto_timer),
                     checked = settings.timerEnabled,
                     onCheckedChange = onSetEnabled,
                 )
@@ -267,12 +269,12 @@ private fun TimerDialog(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
                 )
                 SettingSwitchRow(
-                    title = "播放完当前音频后暂停",
+                    title = stringResource(R.string.settings_wait_for_end),
                     checked = settings.waitForCurrentEnd,
                     onCheckedChange = onSetWaitForEnd,
                 )
                 Text(
-                    text = "定时时长",
+                    text = stringResource(R.string.dialog_timer_duration),
                     modifier = Modifier.padding(top = 8.dp),
                     style = MaterialTheme.typography.titleMedium,
                 )
@@ -300,10 +302,10 @@ private fun TimerDialog(
         },
         dismissButton = {
             if (state.timerActive) {
-                TextButton(onClick = onStop) { Text("取消本次定时") }
+                TextButton(onClick = onStop) { Text(stringResource(R.string.dialog_stop_timer)) }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_close)) } },
     )
 }
 
@@ -342,7 +344,7 @@ private fun <T> ChoiceDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_close)) } },
     )
 }
 
@@ -356,23 +358,23 @@ private fun SeekStepDialog(
     val valueSeconds = text.toLongOrNull()?.takeIf { it in 1L..(Long.MAX_VALUE / 1_000L) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("快进 / 快退跨度") },
+        title = { Text(stringResource(R.string.dialog_seek_step)) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it.filter(Char::isDigit) },
                 singleLine = true,
-                label = { Text("秒数") },
+                label = { Text(stringResource(R.string.dialog_seconds)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_cancel)) } },
         confirmButton = {
             TextButton(
                 enabled = valueSeconds != null && valueSeconds > 0L,
                 onClick = { valueSeconds?.let { onSave(it * 1000L) } },
             ) {
-                Text("保存")
+                Text(stringResource(R.string.dialog_save))
             }
         },
     )
@@ -388,7 +390,7 @@ private fun TimerDurationDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("定时长度") },
+        title = { Text(stringResource(R.string.dialog_timer_length)) },
         text = {
             Column {
                 settings.timerDurationOptionsMs.forEach { duration ->
@@ -415,7 +417,7 @@ private fun TimerDurationDialog(
                             ) {
                                 Icon(
                                     Icons.Filled.Delete,
-                                    contentDescription = "删除",
+                                    contentDescription = stringResource(R.string.dialog_delete),
                                 )
                             }
                         },
@@ -426,11 +428,11 @@ private fun TimerDurationDialog(
                     onClick = onAdd,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("添加自定义时长")
+                    Text(stringResource(R.string.dialog_add_custom_duration))
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_close)) } },
     )
 }
 
@@ -445,23 +447,23 @@ private fun AddDurationDialog(
         ?.times(60_000L)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("添加定时长度") },
+        title = { Text(stringResource(R.string.dialog_add_duration)) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it.filter(Char::isDigit) },
                 singleLine = true,
-                label = { Text("分钟") },
+                label = { Text(stringResource(R.string.dialog_minutes)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_cancel)) } },
         confirmButton = {
             TextButton(
                 enabled = durationMs != null,
                 onClick = { durationMs?.let(onSave) },
             ) {
-                Text("保存")
+                Text(stringResource(R.string.dialog_save))
             }
         },
     )

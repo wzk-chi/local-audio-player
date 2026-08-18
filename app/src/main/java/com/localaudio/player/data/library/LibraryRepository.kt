@@ -61,10 +61,15 @@ class LibraryRepository(
             )
         }.onFailure { return }
         if (_state.value.folders.any { it.uri == uri.toString() }) return
-        val folder = FolderItem(uri.toString(), queryDisplayName(uri) ?: fallbackFolderName(uri))
-        _state.update { it.copy(folders = it.folders + folder) }
-        persist { store.writeFolders(_state.value.folders) }
-        startScan(folder)
+        executor.execute {
+            val folder = FolderItem(uri.toString(), queryDisplayName(uri) ?: fallbackFolderName(uri))
+            post {
+                if (_state.value.folders.any { it.uri == folder.uri }) return@post
+                _state.update { it.copy(folders = it.folders + folder) }
+                persist { store.writeFolders(_state.value.folders) }
+                startScan(folder)
+            }
+        }
     }
 
     fun removeFolder(uriString: String) {

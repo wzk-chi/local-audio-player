@@ -21,6 +21,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import com.localaudio.player.R
 
 /** Android service shell for the playback coordinator and framework media session. */
 class PlaybackService : Service() {
@@ -132,7 +133,7 @@ class PlaybackService : Service() {
             .setSmallIcon(
                 if (current.isPlaying) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause,
             )
-            .setContentTitle(item?.title ?: "LocalAudio")
+            .setContentTitle(item?.title ?: getString(R.string.notification_default_title))
             .setContentText(item?.artist ?: "")
             .setContentIntent(mainActivityPendingIntent())
             .setOngoing(current.isPlaying)
@@ -144,7 +145,7 @@ class PlaybackService : Service() {
             .addAction(
                 Notification.Action.Builder(
                     Icon.createWithResource(this, android.R.drawable.ic_media_previous),
-                    "上一首",
+                    getString(R.string.notification_previous),
                     servicePendingIntent(ACTION_PREVIOUS),
                 ).build(),
             )
@@ -154,14 +155,14 @@ class PlaybackService : Service() {
                         this,
                         if (current.isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
                     ),
-                    if (current.isPlaying) "暂停" else "播放",
+                    getString(if (current.isPlaying) R.string.player_pause else R.string.player_play),
                     servicePendingIntent(if (current.isPlaying) ACTION_PAUSE else ACTION_PLAY),
                 ).build(),
             )
             .addAction(
                 Notification.Action.Builder(
                     Icon.createWithResource(this, android.R.drawable.ic_media_next),
-                    "下一首",
+                    getString(R.string.notification_next),
                     servicePendingIntent(ACTION_NEXT),
                 ).build(),
             )
@@ -188,7 +189,7 @@ class PlaybackService : Service() {
 
     private fun createNotificationChannel() {
         notificationManager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "播放控制", NotificationManager.IMPORTANCE_LOW),
+            NotificationChannel(CHANNEL_ID, getString(R.string.notification_channel), NotificationManager.IMPORTANCE_LOW),
         )
     }
 
