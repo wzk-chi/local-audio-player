@@ -38,9 +38,6 @@ class PlatformPlayer(
     private var currentGeneration = 0L
     private var preparedGeneration: Long? = null
 
-    val generation: Long
-        get() = currentGeneration
-
     val isPrepared: Boolean
         get() = mediaPlayer != null && preparedGeneration == currentGeneration
 

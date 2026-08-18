@@ -1,8 +1,8 @@
 package com.localaudio.player.playback
 
 import android.content.Context
-import android.net.Uri
 import com.localaudio.player.data.model.AudioItem
+import com.localaudio.player.data.model.AudioItemJson
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -22,16 +22,7 @@ class PlaybackStore(context: Context) {
         val array = json.getJSONArray("queue")
         PlaybackSnapshot(
             queue = (0 until array.length()).map { index ->
-                val item = array.getJSONObject(index)
-                AudioItem(
-                    uri = Uri.parse(item.getString("uri")),
-                    title = item.getString("title"),
-                    artist = item.getString("artist"),
-                    durationMs = item.optLong("duration", 0L),
-                    folderUri = item.getString("folderUri"),
-                    folderName = item.getString("folderName"),
-                    relativePath = item.optString("relativePath"),
-                )
+                AudioItemJson.decode(array.getJSONObject(index))
             },
             currentIndex = json.optInt("index", 0).coerceIn(0, (array.length() - 1).coerceAtLeast(0)),
             positionMs = json.optLong("position", 0L).coerceAtLeast(0L),
@@ -41,16 +32,7 @@ class PlaybackStore(context: Context) {
     fun writeSnapshot(snapshot: PlaybackSnapshot) {
         val queue = JSONArray()
         snapshot.queue.forEach { item ->
-            queue.put(
-                JSONObject()
-                    .put("uri", item.uri.toString())
-                    .put("title", item.title)
-                    .put("artist", item.artist)
-                    .put("duration", item.durationMs)
-                    .put("folderUri", item.folderUri)
-                    .put("folderName", item.folderName)
-                    .put("relativePath", item.relativePath),
-            )
+            queue.put(AudioItemJson.encode(item))
         }
         preferences.edit()
             .putString(

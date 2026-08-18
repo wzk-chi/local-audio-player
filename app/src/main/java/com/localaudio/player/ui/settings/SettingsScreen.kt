@@ -32,6 +32,7 @@ fun SettingsScreen(
     folderCount: Int,
     onThemeClick: () -> Unit,
     onHeaderClick: () -> Unit,
+    onSetHomeListBottomUp: (Boolean) -> Unit,
     onSetShowWhenLocked: (Boolean) -> Unit,
     onSetTimerEnabled: (Boolean) -> Unit,
     onSetWaitForCurrentEnd: (Boolean) -> Unit,
@@ -58,6 +59,12 @@ fun SettingsScreen(
                         title = "首页顶栏",
                         value = headerLabel(settings.homeHeaderMode),
                         onClick = onHeaderClick,
+                    )
+                    SettingsDivider()
+                    SettingSwitchRow(
+                        title = "首页从底部向上排列",
+                        checked = settings.homeListBottomUp,
+                        onCheckedChange = onSetHomeListBottomUp,
                     )
                     SettingsDivider()
                     SettingSwitchRow(

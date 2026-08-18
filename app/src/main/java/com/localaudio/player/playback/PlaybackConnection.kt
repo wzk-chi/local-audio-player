@@ -25,6 +25,7 @@ class PlaybackConnection(
     private val context = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val binder = MutableStateFlow<PlaybackService.LocalBinder?>(null)
+    private val pendingCommands = ArrayDeque<PlaybackCommand>()
     private var bindingRequested = false
     private var bound = false
 
@@ -36,11 +37,13 @@ class PlaybackConnection(
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             val currentBinder = service as PlaybackService.LocalBinder
             binder.value = currentBinder
+            while (pendingCommands.isNotEmpty()) {
+                currentBinder.dispatch(pendingCommands.removeFirst())
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             binder.value = null
-            bound = false
         }
     }
 
@@ -53,13 +56,19 @@ class PlaybackConnection(
     }
 
     fun dispatch(command: PlaybackCommand) {
-        binder.value?.dispatch(command)
+        val currentBinder = binder.value
+        if (currentBinder == null) {
+            pendingCommands.addLast(command)
+        } else {
+            currentBinder.dispatch(command)
+        }
     }
 
     override fun close() {
         if (!bindingRequested) return
         bindingRequested = false
         binder.value = null
+        pendingCommands.clear()
         if (bound) {
             context.unbindService(serviceConnection)
             bound = false

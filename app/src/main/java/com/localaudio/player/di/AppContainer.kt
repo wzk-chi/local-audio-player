@@ -11,7 +11,7 @@ import com.localaudio.player.playback.PlaybackStore
 class AppContainer(context: Context) {
     private val context = context.applicationContext
     val settingsRepository = SettingsRepository(context)
-    val libraryStore = LibraryStore(context)
+    private val libraryStore = LibraryStore(context)
     val libraryRepository = LibraryRepository(context, MediaScanner(context), libraryStore)
     val playbackStore = PlaybackStore(context)
 

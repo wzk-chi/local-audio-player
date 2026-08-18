@@ -1,10 +1,5 @@
 package com.localaudio.player.ui.player
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,7 +27,6 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -43,19 +37,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -66,10 +55,7 @@ import com.localaudio.player.ui.components.PlayerAction
 import com.localaudio.player.ui.components.PlayerTransportSegment
 import com.localaudio.player.ui.components.WavyPlayerSlider
 import com.localaudio.player.ui.util.formatTime
-import kotlinx.coroutines.launch
-import kotlin.math.abs
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PlayerScreen(
     modifier: Modifier = Modifier,
@@ -96,16 +82,27 @@ fun PlayerScreen(
         modifier = modifier
             .fillMaxSize()
             .graphicsLayer { alpha = if (visible) 1f else 0f }
+            .semantics {
+                if (!visible) hideFromAccessibility()
+            }
             .padding(horizontal = 20.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(modifier = Modifier.weight(1f))
         CoverPlaceholder(modifier = Modifier.size(220.dp))
         Spacer(modifier = Modifier.height(14.dp))
-        SwipeableTrackTitle(
+        SwipeableTrackLabel(
             title = state.currentItem?.title ?: "还没有播放内容\n请到首页选择歌曲",
             onNext = onNext,
             onPrevious = onPrevious,
+            textStyle = MaterialTheme.typography.headlineSmall,
+            textColor = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp),
+            textAlign = TextAlign.Center,
+            maxLines = 3,
+            horizontalPadding = 8.dp,
         )
         Spacer(modifier = Modifier.height(18.dp))
         val segmentStartShape = RoundedCornerShape(
@@ -145,8 +142,16 @@ fun PlayerScreen(
                 .offset(y = (-4).dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(formatTime(if (seeking) sliderValue.toLong() else state.positionMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(formatTime(state.durationMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                text = formatTime(if (seeking) sliderValue.toLong() else state.positionMs),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = formatTime(state.durationMs),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         Box(
             modifier = Modifier
@@ -220,7 +225,7 @@ fun PlayerScreen(
         Row(
             modifier = Modifier
                 .height(52.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PlayerAction(
@@ -228,7 +233,7 @@ fun PlayerScreen(
                 label = playModeLabel(state),
                 onClick = onOpenMode,
                 shape = actionStartShape,
-                modifier = Modifier.size(width = 96.dp, height = 52.dp),
+                modifier = Modifier.size(width = 76.dp, height = 52.dp),
             )
             PlayerAction(
                 icon = Icons.Filled.Timer,
@@ -236,118 +241,14 @@ fun PlayerScreen(
                 onClick = onOpenTimer,
                 shape = actionInnerShape,
                 active = state.timerActive,
-                modifier = Modifier.size(width = 96.dp, height = 52.dp),
+                modifier = Modifier.size(width = 76.dp, height = 52.dp),
             )
             PlayerAction(
                 icon = Icons.AutoMirrored.Filled.QueueMusic,
                 label = "列表",
                 onClick = onOpenQueue,
                 shape = actionEndShape,
-                modifier = Modifier.size(width = 96.dp, height = 52.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun SwipeableTrackTitle(
-    title: String,
-    onNext: () -> Unit,
-    onPrevious: () -> Unit,
-) {
-    val density = LocalDensity.current
-    val animationScope = rememberCoroutineScope()
-    val settleOffset = remember { Animatable(0f) }
-    var settling by remember { mutableStateOf(false) }
-    val latestOnNext = rememberUpdatedState(onNext)
-    val latestOnPrevious = rememberUpdatedState(onPrevious)
-    val latestTitle = rememberUpdatedState(title)
-    var displayedTitle by remember { mutableStateOf(title) }
-    var dragOffset by remember { mutableFloatStateOf(0f) }
-    var contentWidth by remember { mutableFloatStateOf(0f) }
-    val dragThreshold = with(density) { 56.dp.toPx() }
-    val touchSlop = with(density) { 8.dp.toPx() }
-    val maxOffset = contentWidth.coerceAtLeast(180f)
-
-    LaunchedEffect(title, settling) {
-        if (!settling) displayedTitle = title
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(120.dp)
-            .clipToBounds()
-            .onSizeChanged { contentWidth = it.width.toFloat() }
-            .pointerInput(maxOffset) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    if (settling) {
-                        while (awaitPointerEvent().changes.any { it.pressed }) Unit
-                        return@awaitEachGesture
-                    }
-                    var totalDrag = 0f
-                    var dragging = false
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        val delta = change.positionChange().x
-                        totalDrag += delta
-                        if (!dragging && abs(totalDrag) > touchSlop) dragging = true
-                        if (dragging) {
-                            change.consume()
-                            dragOffset = (dragOffset + delta).coerceIn(-maxOffset, maxOffset)
-                        }
-                        if (!change.pressed) break
-                    }
-                    if (dragging) {
-                        val direction = when {
-                            dragOffset <= -dragThreshold -> -1
-                            dragOffset >= dragThreshold -> 1
-                            else -> 0
-                        }
-                        if (!settling) {
-                            val releasedOffset = dragOffset
-                            settling = true
-                            animationScope.launch {
-                                try {
-                                    settleOffset.snapTo(releasedOffset)
-                                    if (direction == 0) {
-                                        settleOffset.animateTo(0f, spring(dampingRatio = 0.82f, stiffness = 520f))
-                                    } else {
-                                        if (direction < 0) latestOnNext.value() else latestOnPrevious.value()
-                                        settleOffset.animateTo(direction * maxOffset, tween(durationMillis = 180))
-                                        settleOffset.snapTo(-direction * maxOffset)
-                                        displayedTitle = latestTitle.value
-                                        settleOffset.animateTo(0f, tween(durationMillis = 180))
-                                    }
-                                } finally {
-                                    dragOffset = 0f
-                                    settling = false
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .graphicsLayer {
-                    translationX = if (settling) settleOffset.value else dragOffset
-                },
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = displayedTitle,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                style = MaterialTheme.typography.headlineSmall,
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 3,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.size(width = 76.dp, height = 52.dp),
             )
         }
     }

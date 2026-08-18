@@ -37,11 +37,18 @@ class LibraryRepository(
             val savedFolders = store.readFolders()
             val cachedItems = store.readItems()
             post {
-                _state.value = LibraryState(
-                    folders = savedFolders,
-                    items = cachedItems.filter { item -> savedFolders.any { it.uri == item.folderUri } },
+                val current = _state.value
+                val currentFolderUris = current.folders.mapTo(HashSet()) { it.uri }
+                val loadedFolders = savedFolders.filterNot { it.uri in currentFolderUris }
+                val folders = (current.folders + loadedFolders).distinctBy { it.uri }
+                val folderUris = folders.mapTo(HashSet()) { it.uri }
+                _state.value = current.copy(
+                    folders = folders,
+                    items = (current.items + cachedItems)
+                        .filter { it.folderUri in folderUris }
+                        .distinctBy { it.key },
                 )
-                savedFolders.forEach { startScan(it) }
+                loadedFolders.forEach { startScan(it) }
             }
         }
     }
@@ -126,7 +133,10 @@ class LibraryRepository(
                 postCurrent(folder.uri, scanToken) {
                     jobs.remove(folder.uri)
                     _state.update {
-                        it.copy(scanStates = it.scanStates + (folder.uri to ScanState.Failed(error.message ?: "扫描失败")))
+                        it.copy(
+                            scanStates = it.scanStates +
+                                (folder.uri to ScanState.Failed(error.message ?: "扫描失败")),
+                        )
                     }
                 }
             }
@@ -134,7 +144,7 @@ class LibraryRepository(
     }
 
     private fun queryDisplayName(uri: Uri): String? = runCatching {
-        val id = DocumentsContract.getDocumentId(uri)
+        val id = DocumentsContract.getTreeDocumentId(uri)
         val documentUri = DocumentsContract.buildDocumentUriUsingTree(uri, id)
         context.contentResolver.query(
             documentUri,

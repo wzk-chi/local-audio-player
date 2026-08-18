@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -48,22 +47,30 @@ class AppViewModel(
         )
     }
 
-    val uiState: StateFlow<AppUiState> = combine(
+    private val visibleNavigation = navigation
+        .map { VisibleNavigation(it.screen, it.dialog) }
+        .distinctUntilChanged()
+
+    private val contentState = combine(
         homeContent,
         settingsRepository.state,
-        playbackConnection.state,
-        navigation,
-    ) { home, settings, playback, currentNavigation ->
+        visibleNavigation,
+    ) { home, settings, currentNavigation ->
         AppUiState(
             screen = currentNavigation.screen,
             dialog = currentNavigation.dialog,
             homeLocation = home.location,
             homeRows = home.rows,
-            hasLibrary = home.library.items.isNotEmpty(),
             library = home.library,
             settings = settings,
-            playback = playback,
         )
+    }
+
+    val uiState: StateFlow<AppUiState> = combine(
+        contentState,
+        playbackConnection.state,
+    ) { content, playback ->
+        content.copy(playback = playback)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(
@@ -91,10 +98,10 @@ class AppViewModel(
             AppEvent.DismissDialog -> navigation.update { it.copy(dialog = null) }
             is AppEvent.UpdateSetting -> updateSetting(event.change)
             is AppEvent.RescanFolder -> libraryRepository.rescan(event.uri)
-            is AppEvent.RemoveFolder -> libraryRepository.removeFolder(event.uri)
+            is AppEvent.RemoveFolder -> removeFolder(event.uri)
             AppEvent.RescanAll -> libraryRepository.rescanAll()
             AppEvent.EnsureNotificationPermission -> ensureNotificationPermission()
-            AppEvent.NotificationPermissionRequestLaunched -> settingsRepository.markNotificationRequested()
+            AppEvent.NotificationPermissionHandled -> settingsRepository.markNotificationRequested()
         }
     }
 
@@ -138,10 +145,18 @@ class AppViewModel(
         }
     }
 
+    private fun removeFolder(uri: String) {
+        if (navigation.value.homeLocation?.folderUri == uri) {
+            updateHomeLocation(null)
+        }
+        libraryRepository.removeFolder(uri)
+    }
+
     private fun updateSetting(change: SettingChange) {
         when (change) {
             is SettingChange.SetThemeMode -> settingsRepository.updateThemeMode(change.value)
             is SettingChange.SetHomeHeaderMode -> settingsRepository.updateHomeHeaderMode(change.value)
+            is SettingChange.SetHomeListBottomUp -> settingsRepository.updateHomeListBottomUp(change.value)
             is SettingChange.SetShowWhenLocked -> settingsRepository.updateShowWhenLocked(change.value)
             is SettingChange.SetTimerEnabled -> settingsRepository.updateTimerEnabled(change.value)
             is SettingChange.SetTimerDuration -> settingsRepository.updateTimerDurationMs(change.valueMs)
@@ -171,6 +186,11 @@ class AppViewModel(
         val screen: AppScreen = AppScreen.HOME,
         val dialog: AppDialog? = null,
         val homeLocation: FolderLocation? = null,
+    )
+
+    private data class VisibleNavigation(
+        val screen: AppScreen,
+        val dialog: AppDialog?,
     )
 
     private data class HomeContent(

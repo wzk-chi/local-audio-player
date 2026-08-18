@@ -155,6 +155,7 @@ class PlaybackCoordinator(
     private fun previous() {
         if (queue.isEmpty()) return
         consecutiveLoadFailures = 0
+        val shouldPlay = desiredPlaying || player?.isPlaying() == true
         when (
             val move = queueNavigator.previous(
                 queueSize = queue.size,
@@ -163,7 +164,11 @@ class PlaybackCoordinator(
             )
         ) {
             is QueueMove.Select -> {
-                selectTrack(move.index, shouldPlay = true, restartAutomaticTimer = true)
+                selectTrack(
+                    index = move.index,
+                    shouldPlay = shouldPlay,
+                    restartAutomaticTimer = shouldPlay,
+                )
             }
 
             QueueMove.Stop -> Unit
@@ -272,6 +277,7 @@ class PlaybackCoordinator(
         }
         val settings = settingsRepository.state.value
         val wasPlaying = player?.isPlaying() == true
+        val shouldPlay = desiredPlaying || wasPlaying
         when (
             val move = queueNavigator.next(
                 queueSize = queue.size,
@@ -284,8 +290,8 @@ class PlaybackCoordinator(
             is QueueMove.Select -> {
                 selectTrack(
                     index = move.index,
-                    shouldPlay = !manual || desiredPlaying || wasPlaying,
-                    restartAutomaticTimer = manual,
+                    shouldPlay = shouldPlay,
+                    restartAutomaticTimer = manual && shouldPlay,
                 )
             }
 
@@ -376,7 +382,6 @@ class PlaybackCoordinator(
             activeTimerDurationMs = timerState.durationMs,
             timerRemainingMs = sleepTimer.remainingMs(timerState),
             timerWaitingForEnd = timerState.waitingForTrackEnd,
-            timerSource = timerState.source,
         )
     }
 }

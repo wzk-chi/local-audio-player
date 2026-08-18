@@ -69,11 +69,11 @@ kotlin {
 
 dependencies {
     implementation(platform("androidx.compose:compose-bom:${libs.versions.composeBom.get()}"))
-    implementation("androidx.activity:activity-compose:${libs.versions.activityCompose.get()}")
-    implementation("androidx.compose.foundation:foundation")
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
-    implementation("androidx.compose.ui:ui")
+    implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)

@@ -28,7 +28,6 @@ data class AppUiState(
     val dialog: AppDialog? = null,
     val homeLocation: FolderLocation? = null,
     val homeRows: List<HomeRow> = emptyList(),
-    val hasLibrary: Boolean = false,
     val library: LibraryState = LibraryState(),
     val settings: AppSettings = AppSettings(),
     val playback: PlaybackState = PlaybackState(),
@@ -37,6 +36,7 @@ data class AppUiState(
 sealed interface SettingChange {
     data class SetThemeMode(val value: ThemeMode) : SettingChange
     data class SetHomeHeaderMode(val value: HomeHeaderMode) : SettingChange
+    data class SetHomeListBottomUp(val value: Boolean) : SettingChange
     data class SetShowWhenLocked(val value: Boolean) : SettingChange
     data class SetTimerEnabled(val value: Boolean) : SettingChange
     data class SetTimerDuration(val valueMs: Long) : SettingChange
@@ -62,7 +62,7 @@ sealed interface AppEvent {
     data class RemoveFolder(val uri: String) : AppEvent
     data object RescanAll : AppEvent
     data object EnsureNotificationPermission : AppEvent
-    data object NotificationPermissionRequestLaunched : AppEvent
+    data object NotificationPermissionHandled : AppEvent
 }
 
 sealed interface AppEffect {

@@ -37,6 +37,8 @@ class PlaybackService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val notificationManager by lazy { getSystemService(NotificationManager::class.java) }
     private var foregroundStarted = false
+    private var lastMetadataSnapshot: MetadataSnapshot? = null
+    private var lastNotificationSnapshot: NotificationSnapshot? = null
     private lateinit var coordinator: PlaybackCoordinator
     private lateinit var mediaSession: MediaSession
 
@@ -72,7 +74,7 @@ class PlaybackService : Service() {
         serviceScope.launch {
             coordinator.state.collect { state ->
                 updateMediaSession(state)
-                if (foregroundStarted) notificationManager.notify(NOTIFICATION_ID, notification())
+                if (foregroundStarted) updateNotification(state)
             }
         }
     }
@@ -103,7 +105,17 @@ class PlaybackService : Service() {
                 )
                 .build(),
         )
-        current.currentItem?.let { item ->
+        val item = current.currentItem
+        val metadataSnapshot = item?.let {
+            MetadataSnapshot(
+                itemKey = it.key,
+                title = it.title,
+                artist = it.artist,
+                durationMs = current.durationMs,
+            )
+        }
+        if (item != null && metadataSnapshot != lastMetadataSnapshot) {
+            lastMetadataSnapshot = metadataSnapshot
             mediaSession.setMetadata(
                 MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, item.title)
@@ -114,11 +126,12 @@ class PlaybackService : Service() {
         }
     }
 
-    private fun notification(): Notification {
-        val current = coordinator.state.value
+    private fun notification(current: PlaybackState): Notification {
         val item = current.currentItem
         return Notification.Builder(this, CHANNEL_ID)
-            .setSmallIcon(if (current.isPlaying) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause)
+            .setSmallIcon(
+                if (current.isPlaying) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause,
+            )
             .setContentTitle(item?.title ?: "LocalAudio")
             .setContentText(item?.artist ?: "")
             .setContentIntent(mainActivityPendingIntent())
@@ -156,12 +169,21 @@ class PlaybackService : Service() {
     }
 
     private fun ensureForeground() {
+        val current = coordinator.state.value
         if (!foregroundStarted) {
-            startForeground(NOTIFICATION_ID, notification())
+            startForeground(NOTIFICATION_ID, notification(current))
             foregroundStarted = true
+            lastNotificationSnapshot = current.notificationSnapshot()
         } else {
-            notificationManager.notify(NOTIFICATION_ID, notification())
+            updateNotification(current)
         }
+    }
+
+    private fun updateNotification(current: PlaybackState) {
+        val snapshot = current.notificationSnapshot()
+        if (snapshot == lastNotificationSnapshot) return
+        lastNotificationSnapshot = snapshot
+        notificationManager.notify(NOTIFICATION_ID, notification(current))
     }
 
     private fun createNotificationChannel() {
@@ -199,4 +221,25 @@ class PlaybackService : Service() {
         const val ACTION_NEXT = "com.localaudio.player.NEXT"
         const val ACTION_PREVIOUS = "com.localaudio.player.PREVIOUS"
     }
+
+    private data class MetadataSnapshot(
+        val itemKey: String,
+        val title: String,
+        val artist: String,
+        val durationMs: Long,
+    )
+
+    private data class NotificationSnapshot(
+        val itemKey: String?,
+        val title: String?,
+        val artist: String?,
+        val isPlaying: Boolean,
+    )
+
+    private fun PlaybackState.notificationSnapshot() = NotificationSnapshot(
+        itemKey = currentItem?.key,
+        title = currentItem?.title,
+        artist = currentItem?.artist,
+        isPlaying = isPlaying,
+    )
 }

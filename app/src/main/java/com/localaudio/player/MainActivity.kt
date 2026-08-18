@@ -32,11 +32,13 @@ class MainActivity : ComponentActivity() {
         uri?.let { viewModel.onEvent(AppEvent.FolderSelected(it)) }
     }
 
-    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        viewModel.onEvent(AppEvent.NotificationPermissionHandled)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        applyShowWhenLocked(viewModel.settings.value.showWhenLocked)
+        setShowWhenLocked(viewModel.settings.value.showWhenLocked)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 viewModel.onEvent(AppEvent.Back)
@@ -48,7 +50,7 @@ class MainActivity : ComponentActivity() {
                     viewModel.settings
                         .map { it.showWhenLocked }
                         .distinctUntilChanged()
-                        .collect(::applyShowWhenLocked)
+                        .collect(::setShowWhenLocked)
                 }
                 launch {
                     viewModel.effects.collect { effect ->
@@ -67,10 +69,6 @@ class MainActivity : ComponentActivity() {
             )
         }
         viewModel.onEvent(AppEvent.EnsureNotificationPermission)
-    }
-
-    private fun applyShowWhenLocked(enabled: Boolean) {
-        setShowWhenLocked(enabled)
     }
 
     @Suppress("DEPRECATION")
@@ -119,7 +117,8 @@ class MainActivity : ComponentActivity() {
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            viewModel.onEvent(AppEvent.NotificationPermissionRequestLaunched)
+        } else {
+            viewModel.onEvent(AppEvent.NotificationPermissionHandled)
         }
     }
 }

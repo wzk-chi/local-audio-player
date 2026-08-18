@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -57,6 +58,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -75,8 +78,8 @@ fun HomeScreen(
     location: FolderLocation?,
     rows: List<HomeRow>,
     playingKey: String?,
-    hasLibrary: Boolean,
     headerMode: HomeHeaderMode,
+    listBottomUp: Boolean,
     onBack: () -> Unit,
     onLocateCurrent: () -> Unit,
     onDirectoryClick: (FolderLocation) -> Unit,
@@ -84,6 +87,7 @@ fun HomeScreen(
     onAddFolder: () -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val displayRows = if (listBottomUp) rows.asReversed() else rows
     var headerVisible by remember { mutableStateOf(headerMode != HomeHeaderMode.HIDDEN) }
     var previousIndex by remember { mutableIntStateOf(0) }
     var locateRequest by remember { mutableIntStateOf(0) }
@@ -99,18 +103,24 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(locateRequest, rows, playingKey) {
+    LaunchedEffect(locateRequest, rows, playingKey, listBottomUp) {
         if (locateRequest == 0 || playingKey == null) return@LaunchedEffect
         val index = rows.indexOfFirst { row ->
             row is HomeRow.Audio && row.item.key == playingKey
         }
-        if (index >= 0) listState.animateScrollToItem(index)
+        if (index >= 0) {
+            val displayIndex = if (listBottomUp) rows.lastIndex - index else index
+            listState.animateScrollToItem(displayIndex)
+        }
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .graphicsLayer { alpha = if (visible) 1f else 0f },
+            .graphicsLayer { alpha = if (visible) 1f else 0f }
+            .semantics {
+                if (!visible) hideFromAccessibility()
+            },
     ) {
         if (headerVisible) {
             HomeHeader(
@@ -124,16 +134,17 @@ fun HomeScreen(
             )
         }
         if (rows.isEmpty()) {
-            EmptyHome(hasLibrary = hasLibrary, onAddFolder = onAddFolder)
+            EmptyHome(inDirectory = location != null, onAddFolder = onAddFolder)
         } else {
             Box(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    reverseLayout = listBottomUp,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    items(rows, key = { rowKey(it) }) { row ->
+                    items(displayRows, key = { rowKey(it) }) { row ->
                         when (row) {
                             is HomeRow.Directory -> DirectoryRow(row.location, onDirectoryClick)
                             is HomeRow.Audio -> AudioRow(row.item, playingKey, onAudioClick)
@@ -142,6 +153,7 @@ fun HomeScreen(
                 }
                 HomeScrollbar(
                     listState = listState,
+                    reverseLayout = listBottomUp,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = 4.dp, top = 12.dp, bottom = 12.dp)
@@ -156,6 +168,7 @@ fun HomeScreen(
 @Composable
 private fun HomeScrollbar(
     listState: androidx.compose.foundation.lazy.LazyListState,
+    reverseLayout: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -173,7 +186,8 @@ private fun HomeScrollbar(
         val thumbTravelPx = trackHeightPx * (1f - (currentMetrics?.thumbFraction ?: 1f))
         if (currentMetrics != null && thumbTravelPx > 0f) {
             coroutineScope.launch {
-                listState.scrollBy(delta * currentMetrics.scrollRangePx / thumbTravelPx)
+                val direction = if (reverseLayout) -1f else 1f
+                listState.scrollBy(direction * delta * currentMetrics.scrollRangePx / thumbTravelPx)
             }
         }
     }
@@ -189,7 +203,11 @@ private fun HomeScrollbar(
     ) {
         val currentMetrics = metrics ?: return@Canvas
         val thumbHeight = (size.height * currentMetrics.thumbFraction).coerceAtLeast(1f)
-        val thumbOffset = (size.height - thumbHeight) * currentMetrics.scrollFraction
+        val thumbOffset = (size.height - thumbHeight) * if (reverseLayout) {
+            1f - currentMetrics.scrollFraction
+        } else {
+            currentMetrics.scrollFraction
+        }
         val trackWidth = 4.dp.toPx().coerceAtMost(size.width)
         val thumbWidth = 8.dp.toPx().coerceAtMost(size.width)
 
@@ -299,7 +317,11 @@ private fun DirectoryRow(location: FolderLocation, onClick: (FolderLocation) -> 
 private fun AudioRow(item: AudioItem, playingKey: String?, onClick: (AudioItem) -> Unit) {
     val active = item.key == playingKey
     val titleColor = if (active) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
-    val durationColor = if (active) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    val durationColor = if (active) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
     ListItem(
         modifier = Modifier
@@ -338,11 +360,14 @@ private fun AudioRow(item: AudioItem, playingKey: String?, onClick: (AudioItem) 
 }
 
 @Composable
-private fun EmptyHome(hasLibrary: Boolean, onAddFolder: () -> Unit) {
+private fun EmptyHome(inDirectory: Boolean, onAddFolder: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (hasLibrary) "此文件夹为空" else "还没有音乐文件夹", style = MaterialTheme.typography.titleMedium)
-            if (!hasLibrary) Button(onClick = onAddFolder) { Text("添加文件夹") }
+            Text(
+                text = if (inDirectory) "此文件夹为空" else "还没有音乐文件夹",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            if (!inDirectory) Button(onClick = onAddFolder) { Text("添加文件夹") }
         }
     }
 }

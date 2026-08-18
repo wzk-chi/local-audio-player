@@ -22,6 +22,9 @@ class SettingsRepository(context: Context) {
     fun updateHomeHeaderMode(value: HomeHeaderMode) =
         updateString(KEY_HEADER, value.name) { it.copy(homeHeaderMode = value) }
 
+    fun updateHomeListBottomUp(value: Boolean) =
+        updateBoolean(KEY_HOME_LIST_BOTTOM_UP, value) { it.copy(homeListBottomUp = value) }
+
     fun updateShowWhenLocked(value: Boolean) =
         updateBoolean(KEY_SHOW_WHEN_LOCKED, value) { it.copy(showWhenLocked = value) }
 
@@ -40,17 +43,17 @@ class SettingsRepository(context: Context) {
     }
 
     fun updateRepeatMode(value: Int) {
-        val normalized = value.coerceIn(0, 2)
+        val normalized = value.coerceIn(REPEAT_OFF, REPEAT_ALL)
         updateInt(KEY_REPEAT, normalized) { it.copy(repeatMode = normalized) }
     }
 
     fun updateShuffleEnabled(value: Boolean) =
         updateBoolean(KEY_SHUFFLE, value) { it.copy(shuffleEnabled = value) }
 
-    fun updateTimerDurationOptions(values: List<Long>, selectedMs: Long? = null) {
+    fun updateTimerDurationOptions(values: List<Long>) {
         val options = values.filter { it > 0L }.distinct().sorted()
         if (options.isEmpty()) return
-        val selected = selectedMs ?: _state.value.timerDurationMs
+        val selected = _state.value.timerDurationMs
         val normalizedSelected = if (selected in options) selected else options.first()
         updateState(
             preferences.edit()
@@ -137,13 +140,14 @@ class SettingsRepository(context: Context) {
                 preferences.getString(KEY_HEADER, null),
                 HomeHeaderMode.FIXED,
             ),
+            homeListBottomUp = preferences.getBoolean(KEY_HOME_LIST_BOTTOM_UP, false),
             showWhenLocked = preferences.getBoolean(KEY_SHOW_WHEN_LOCKED, false),
             timerEnabled = preferences.getBoolean(KEY_TIMER_ENABLED, true),
             timerDurationMs = duration,
             timerDurationOptionsMs = options,
             waitForCurrentEnd = preferences.getBoolean(KEY_WAIT_FOR_END, true),
             seekStepMs = preferences.getLong(KEY_SEEK_STEP, 10_000L).coerceAtLeast(1_000L),
-            repeatMode = preferences.getInt(KEY_REPEAT, REPEAT_ALL).coerceIn(0, 2),
+            repeatMode = preferences.getInt(KEY_REPEAT, REPEAT_ALL).coerceIn(REPEAT_OFF, REPEAT_ALL),
             shuffleEnabled = preferences.getBoolean(KEY_SHUFFLE, false),
             savedHomeLocation = decodeLocation(preferences.getString(KEY_HOME_LOCATION, null)),
         )
@@ -166,6 +170,7 @@ class SettingsRepository(context: Context) {
     private companion object {
         const val KEY_THEME = "theme"
         const val KEY_HEADER = "header"
+        const val KEY_HOME_LIST_BOTTOM_UP = "home_list_bottom_up"
         const val KEY_SHOW_WHEN_LOCKED = "show_when_locked"
         const val KEY_TIMER_ENABLED = "timer_enabled"
         const val KEY_TIMER_DURATION = "timer_duration"
