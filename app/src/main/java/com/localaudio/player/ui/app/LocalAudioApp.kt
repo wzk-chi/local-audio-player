@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
@@ -18,6 +20,10 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
@@ -32,9 +38,13 @@ import com.localaudio.player.playback.PlaybackCommand
 import com.localaudio.player.ui.dialog.AppDialogs
 import com.localaudio.player.ui.home.HomeScreen
 import com.localaudio.player.ui.player.PlaybackBar
+import com.localaudio.player.ui.player.PlaybackProgressSlider
 import com.localaudio.player.ui.player.PlayerScreen
 import com.localaudio.player.ui.settings.LibrarySettingsScreen
 import com.localaudio.player.ui.settings.SettingsScreen
+import kotlinx.coroutines.flow.distinctUntilChanged
+
+private const val MAIN_PAGE_COUNT = 3
 
 @Composable
 fun LocalAudioApp(
@@ -47,6 +57,29 @@ fun LocalAudioApp(
     val togglePlayback = {
         dispatchPlayback(if (state.playback.isPlaying) PlaybackCommand.Pause else PlaybackCommand.Play)
     }
+    val isLibrarySettings = state.screen == AppScreen.LIBRARY_SETTINGS
+    val pagerState = rememberPagerState(
+        initialPage = mainPageFor(state.screen),
+        pageCount = { MAIN_PAGE_COUNT },
+    )
+    val latestScreen by rememberUpdatedState(state.screen)
+
+    LaunchedEffect(state.screen, pagerState) {
+        if (!isLibrarySettings) {
+            val targetPage = mainPageFor(state.screen)
+            if (pagerState.currentPage != targetPage) {
+                pagerState.animateScrollToPage(targetPage)
+            }
+        }
+    }
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .collect { page ->
+                val screen = screenForMainPage(page)
+                if (latestScreen != screen) onEvent(AppEvent.SelectScreen(screen))
+            }
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(),
@@ -55,51 +88,8 @@ fun LocalAudioApp(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f)) {
-                when (state.screen) {
-                    AppScreen.HOME -> HomeScreen(
-                        modifier = Modifier.fillMaxSize(),
-                        location = state.homeLocation,
-                        rows = state.homeRows,
-                        playingKey = state.playback.currentItem?.key,
-                        headerMode = state.settings.homeHeaderMode,
-                        listBottomAligned = state.settings.homeListBottomAligned,
-                        onBack = { onEvent(AppEvent.Back) },
-                        onLocateCurrent = { onEvent(AppEvent.LocateCurrent) },
-                        onDirectoryClick = { onEvent(AppEvent.OpenDirectory(it)) },
-                        onAudioClick = { onEvent(AppEvent.PlayAudio(it)) },
-                        onAddFolder = { onEvent(AppEvent.AddFolder) },
-                    )
-                    AppScreen.PLAYER -> PlayerScreen(
-                        modifier = Modifier.fillMaxSize(),
-                        state = state.playback,
-                        seekStepMs = state.settings.seekStepMs,
-                        showAlbumCover = state.settings.showAlbumCover,
-                        onPlayPause = togglePlayback,
-                        onNext = { dispatchPlayback(PlaybackCommand.Next) },
-                        onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
-                        onSeekBy = { dispatchPlayback(PlaybackCommand.SeekBy(it)) },
-                        onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
-                        onOpenQueue = { onEvent(AppEvent.ShowDialog(AppDialog.Queue)) },
-                        onOpenTimer = { onEvent(AppEvent.ShowDialog(AppDialog.Timer)) },
-                        onOpenMode = { onEvent(AppEvent.ShowDialog(AppDialog.Mode)) },
-                    )
-                    AppScreen.SETTINGS -> SettingsScreen(
-                        settings = state.settings,
-                        folderCount = state.library.folders.size,
-                        onThemeClick = { onEvent(AppEvent.ShowDialog(AppDialog.Theme)) },
-                        onHeaderClick = { onEvent(AppEvent.ShowDialog(AppDialog.Header)) },
-                        onSetHomeListBottomAligned = {
-                            onEvent(AppEvent.UpdateSetting(SettingChange.SetHomeListBottomAligned(it)))
-                        },
-                        onSetShowAlbumCover = { onEvent(AppEvent.UpdateSetting(SettingChange.SetShowAlbumCover(it))) },
-                        onSetShowWhenLocked = { onEvent(AppEvent.UpdateSetting(SettingChange.SetShowWhenLocked(it))) },
-                        onSetTimerEnabled = { onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerEnabled(it))) },
-                        onSetWaitForCurrentEnd = { onEvent(AppEvent.UpdateSetting(SettingChange.SetWaitForCurrentEnd(it))) },
-                        onSeekStepClick = { onEvent(AppEvent.ShowDialog(AppDialog.SeekStep)) },
-                        onTimerDurationClick = { onEvent(AppEvent.ShowDialog(AppDialog.TimerDuration)) },
-                        onOpenLibrary = { onEvent(AppEvent.SelectScreen(AppScreen.LIBRARY_SETTINGS)) },
-                    )
-                    AppScreen.LIBRARY_SETTINGS -> LibrarySettingsScreen(
+                if (isLibrarySettings) {
+                    LibrarySettingsScreen(
                         folders = state.library.folders,
                         scanStates = state.library.scanStates,
                         onBack = { onEvent(AppEvent.Back) },
@@ -108,11 +98,71 @@ fun LocalAudioApp(
                         onRemoveFolder = { onEvent(AppEvent.RemoveFolder(it)) },
                         onRescanAll = { onEvent(AppEvent.RescanAll) },
                     )
+                } else {
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize(),
+                    ) { page ->
+                        when (screenForMainPage(page)) {
+                            AppScreen.HOME -> HomeScreen(
+                                modifier = Modifier.fillMaxSize(),
+                                location = state.homeLocation,
+                                rows = state.homeRows,
+                                playingKey = state.playback.currentItem?.key,
+                                headerMode = state.settings.homeHeaderMode,
+                                listBottomAligned = state.settings.homeListBottomAligned,
+                                onBack = { onEvent(AppEvent.Back) },
+                                onLocateCurrent = { onEvent(AppEvent.LocateCurrent) },
+                                onDirectoryClick = { onEvent(AppEvent.OpenDirectory(it)) },
+                                onAudioClick = { onEvent(AppEvent.PlayAudio(it)) },
+                                onAddFolder = { onEvent(AppEvent.AddFolder) },
+                            )
+                            AppScreen.PLAYER -> PlayerScreen(
+                                modifier = Modifier.fillMaxSize(),
+                                state = state.playback,
+                                seekStepMs = state.settings.seekStepMs,
+                                showAlbumCover = state.settings.showAlbumCover,
+                                onPlayPause = togglePlayback,
+                                onNext = { dispatchPlayback(PlaybackCommand.Next) },
+                                onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
+                                onSeekBy = { dispatchPlayback(PlaybackCommand.SeekBy(it)) },
+                                onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
+                                onOpenQueue = { onEvent(AppEvent.ShowDialog(AppDialog.Queue)) },
+                                onOpenTimer = { onEvent(AppEvent.ShowDialog(AppDialog.Timer)) },
+                                onOpenMode = { onEvent(AppEvent.ShowDialog(AppDialog.Mode)) },
+                            )
+                            AppScreen.SETTINGS -> SettingsScreen(
+                                settings = state.settings,
+                                folderCount = state.library.folders.size,
+                                onThemeClick = { onEvent(AppEvent.ShowDialog(AppDialog.Theme)) },
+                                onHeaderClick = { onEvent(AppEvent.ShowDialog(AppDialog.Header)) },
+                                onSetHomeListBottomAligned = {
+                                    onEvent(AppEvent.UpdateSetting(SettingChange.SetHomeListBottomAligned(it)))
+                                },
+                                onSetShowAlbumCover = {
+                                    onEvent(AppEvent.UpdateSetting(SettingChange.SetShowAlbumCover(it)))
+                                },
+                                onSetShowWhenLocked = {
+                                    onEvent(AppEvent.UpdateSetting(SettingChange.SetShowWhenLocked(it)))
+                                },
+                                onSetTimerEnabled = {
+                                    onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerEnabled(it)))
+                                },
+                                onSetWaitForCurrentEnd = {
+                                    onEvent(AppEvent.UpdateSetting(SettingChange.SetWaitForCurrentEnd(it)))
+                                },
+                                onSeekStepClick = { onEvent(AppEvent.ShowDialog(AppDialog.SeekStep)) },
+                                onTimerDurationClick = { onEvent(AppEvent.ShowDialog(AppDialog.TimerDuration)) },
+                                onOpenLibrary = { onEvent(AppEvent.SelectScreen(AppScreen.LIBRARY_SETTINGS)) },
+                            )
+                            AppScreen.LIBRARY_SETTINGS -> error("Library settings is outside the main pager")
+                        }
+                    }
                 }
             }
 
-            val isLibrarySettings = state.screen == AppScreen.LIBRARY_SETTINGS
-            if (state.screen != AppScreen.PLAYER && !isLibrarySettings) {
+            val pagerScreen = if (isLibrarySettings) state.screen else screenForMainPage(pagerState.currentPage)
+            if (pagerScreen != AppScreen.PLAYER && !isLibrarySettings) {
                 PlaybackBar(
                     state = state.playback,
                     onPlayPause = togglePlayback,
@@ -120,9 +170,13 @@ fun LocalAudioApp(
                     onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
                     onOpenPlayer = { onEvent(AppEvent.SelectScreen(AppScreen.PLAYER)) },
                 )
+                PlaybackProgressSlider(
+                    state = state.playback,
+                    onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
+                )
             }
             if (!isLibrarySettings) {
-                BottomNavigation(state.screen) { onEvent(AppEvent.SelectScreen(it)) }
+                BottomNavigation(pagerScreen) { onEvent(AppEvent.SelectScreen(it)) }
             }
         }
 
@@ -141,7 +195,9 @@ private fun BottomNavigation(screen: AppScreen, onScreenSelected: (AppScreen) ->
     )
 
     NavigationBar(
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp).clip(MaterialTheme.shapes.large),
+        modifier = Modifier
+            .padding(start = 12.dp, top = 4.dp, end = 12.dp, bottom = 8.dp)
+            .clip(MaterialTheme.shapes.large),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 0.dp,
     ) {
@@ -167,4 +223,16 @@ private fun BottomNavigation(screen: AppScreen, onScreenSelected: (AppScreen) ->
             colors = itemColors,
         )
     }
+}
+
+private fun mainPageFor(screen: AppScreen): Int = when (screen) {
+    AppScreen.HOME -> 0
+    AppScreen.PLAYER -> 1
+    AppScreen.SETTINGS, AppScreen.LIBRARY_SETTINGS -> 2
+}
+
+private fun screenForMainPage(page: Int): AppScreen = when (page) {
+    0 -> AppScreen.HOME
+    1 -> AppScreen.PLAYER
+    else -> AppScreen.SETTINGS
 }
