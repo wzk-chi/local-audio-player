@@ -33,7 +33,7 @@
 ## 环境要求
 
 - Android Studio
-- Android Studio 内置 JDK 11
+- Android Studio 内置 JDK 17 或更高版本（当前使用 JDK 21 验证）
 - Android 8.1（API 27）或更高版本
 
 
@@ -49,7 +49,7 @@
 
 ## 构建
 
-在项目根目录执行。构建需要使用 Android Studio 内置 JDK 11：
+在项目根目录执行。构建需要使用 Android Studio 内置 JDK 17 或更高版本；当前命令使用 Android Studio 内置 JDK 21：
 
 ```bash
 JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew :app:assembleDebug
