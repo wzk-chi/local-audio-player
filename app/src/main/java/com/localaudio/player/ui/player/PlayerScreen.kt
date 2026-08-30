@@ -3,7 +3,6 @@ package com.localaudio.player.ui.player
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -47,7 +46,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -170,64 +168,56 @@ fun PlayerScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(76.dp)
-                .padding(horizontal = 8.dp)
-                .clip(RoundedCornerShape(60.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainer),
+                .height(60.dp)
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                PlayerTransportSegment(
-                    icon = Icons.Filled.FastRewind,
-                    contentDescription = stringResource(R.string.player_seek_back),
-                    onClick = { onSeekBy(-seekStepMs) },
-                    shape = segmentStartShape,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                )
-                PlayerTransportSegment(
-                    icon = Icons.Filled.SkipPrevious,
-                    contentDescription = stringResource(R.string.player_previous),
-                    onClick = onPrevious,
-                    shape = segmentInnerShape,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                )
-                PlayerTransportSegment(
-                    icon = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = stringResource(
-                        if (state.isPlaying) R.string.player_pause else R.string.player_play,
-                    ),
-                    onClick = onPlayPause,
-                    shape = segmentInnerShape,
-                    enabled = state.currentItem != null,
-                    iconSize = 36.dp,
-                    active = true,
-                    modifier = Modifier.weight(1.3f).fillMaxHeight(),
-                )
-                PlayerTransportSegment(
-                    icon = Icons.Filled.SkipNext,
-                    contentDescription = stringResource(R.string.player_next),
-                    onClick = onNext,
-                    shape = segmentInnerShape,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                )
-                PlayerTransportSegment(
-                    icon = Icons.Filled.FastForward,
-                    contentDescription = stringResource(R.string.player_seek_forward),
-                    onClick = { onSeekBy(seekStepMs) },
-                    shape = segmentEndShape,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                )
-            }
+            PlayerTransportSegment(
+                icon = Icons.Filled.FastRewind,
+                contentDescription = stringResource(R.string.player_seek_back),
+                onClick = { onSeekBy(-seekStepMs) },
+                shape = segmentStartShape,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            )
+            PlayerTransportSegment(
+                icon = Icons.Filled.SkipPrevious,
+                contentDescription = stringResource(R.string.player_previous),
+                onClick = onPrevious,
+                shape = segmentInnerShape,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            )
+            PlayerTransportSegment(
+                icon = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                contentDescription = stringResource(
+                    if (state.isPlaying) R.string.player_pause else R.string.player_play,
+                ),
+                onClick = onPlayPause,
+                shape = segmentInnerShape,
+                enabled = state.currentItem != null,
+                iconSize = 36.dp,
+                active = true,
+                modifier = Modifier.weight(1.3f).fillMaxHeight(),
+            )
+            PlayerTransportSegment(
+                icon = Icons.Filled.SkipNext,
+                contentDescription = stringResource(R.string.player_next),
+                onClick = onNext,
+                shape = segmentInnerShape,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            )
+            PlayerTransportSegment(
+                icon = Icons.Filled.FastForward,
+                contentDescription = stringResource(R.string.player_seek_forward),
+                onClick = { onSeekBy(seekStepMs) },
+                shape = segmentEndShape,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+            )
         }
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(18.dp))
         val actionStartShape = RoundedCornerShape(
             topStart = 24.dp,
             bottomStart = 24.dp,
