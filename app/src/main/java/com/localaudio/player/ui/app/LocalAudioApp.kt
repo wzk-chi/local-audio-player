@@ -32,6 +32,7 @@ import com.localaudio.player.app.AppScreen
 import com.localaudio.player.app.AppUiState
 import com.localaudio.player.app.SettingChange
 import com.localaudio.player.playback.PlaybackCommand
+import com.localaudio.player.playback.PlaybackState
 import com.localaudio.player.ui.dialog.AppDialogs
 import com.localaudio.player.ui.home.HomeScreen
 import com.localaudio.player.ui.player.PlaybackBar
@@ -101,19 +102,29 @@ fun LocalAudioApp(
                         modifier = Modifier.fillMaxSize(),
                     ) { page ->
                         when (screenForMainPage(page)) {
-                            AppScreen.HOME -> HomeScreen(
-                                modifier = Modifier.fillMaxSize(),
-                                location = state.homeLocation,
-                                rows = state.homeRows,
-                                playingKey = state.playback.currentItem?.key,
-                                headerMode = state.settings.homeHeaderMode,
-                                listBottomAligned = state.settings.homeListBottomAligned,
-                                onBack = { onEvent(AppEvent.Back) },
-                                onLocateCurrent = { onEvent(AppEvent.LocateCurrent) },
-                                onDirectoryClick = { onEvent(AppEvent.OpenDirectory(it)) },
-                                onAudioClick = { onEvent(AppEvent.PlayAudio(it)) },
-                                onAddFolder = { onEvent(AppEvent.AddFolder) },
-                            )
+                            AppScreen.HOME -> Column(modifier = Modifier.fillMaxSize()) {
+                                HomeScreen(
+                                    modifier = Modifier.weight(1f),
+                                    location = state.homeLocation,
+                                    rows = state.homeRows,
+                                    playingKey = state.playback.currentItem?.key,
+                                    headerMode = state.settings.homeHeaderMode,
+                                    listBottomAligned = state.settings.homeListBottomAligned,
+                                    onBack = { onEvent(AppEvent.Back) },
+                                    onLocateCurrent = { onEvent(AppEvent.LocateCurrent) },
+                                    onDirectoryClick = { onEvent(AppEvent.OpenDirectory(it)) },
+                                    onAudioClick = { onEvent(AppEvent.PlayAudio(it)) },
+                                    onAddFolder = { onEvent(AppEvent.AddFolder) },
+                                )
+                                PlaybackControls(
+                                    state = state.playback,
+                                    onPlayPause = togglePlayback,
+                                    onNext = { dispatchPlayback(PlaybackCommand.Next) },
+                                    onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
+                                    onOpenPlayer = { onEvent(AppEvent.SelectScreen(AppScreen.PLAYER)) },
+                                    onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
+                                )
+                            }
                             AppScreen.PLAYER -> PlayerScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 state = state.playback,
@@ -128,30 +139,42 @@ fun LocalAudioApp(
                                 onOpenTimer = { onEvent(AppEvent.ShowDialog(AppDialog.Timer)) },
                                 onOpenMode = { onEvent(AppEvent.ShowDialog(AppDialog.Mode)) },
                             )
-                            AppScreen.SETTINGS -> SettingsScreen(
-                                settings = state.settings,
-                                folderCount = state.library.folders.size,
-                                onThemeClick = { onEvent(AppEvent.ShowDialog(AppDialog.Theme)) },
-                                onHeaderClick = { onEvent(AppEvent.ShowDialog(AppDialog.Header)) },
-                                onSetHomeListBottomAligned = {
-                                    onEvent(AppEvent.UpdateSetting(SettingChange.SetHomeListBottomAligned(it)))
-                                },
-                                onSetShowAlbumCover = {
-                                    onEvent(AppEvent.UpdateSetting(SettingChange.SetShowAlbumCover(it)))
-                                },
-                                onSetShowWhenLocked = {
-                                    onEvent(AppEvent.UpdateSetting(SettingChange.SetShowWhenLocked(it)))
-                                },
-                                onSetTimerEnabled = {
-                                    onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerEnabled(it)))
-                                },
-                                onSetWaitForCurrentEnd = {
-                                    onEvent(AppEvent.UpdateSetting(SettingChange.SetWaitForCurrentEnd(it)))
-                                },
-                                onSeekStepClick = { onEvent(AppEvent.ShowDialog(AppDialog.SeekStep)) },
-                                onTimerDurationClick = { onEvent(AppEvent.ShowDialog(AppDialog.TimerDuration)) },
-                                onOpenLibrary = { onEvent(AppEvent.SelectScreen(AppScreen.LIBRARY_SETTINGS)) },
-                            )
+                            AppScreen.SETTINGS -> Column(modifier = Modifier.fillMaxSize()) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    SettingsScreen(
+                                        settings = state.settings,
+                                        folderCount = state.library.folders.size,
+                                        onThemeClick = { onEvent(AppEvent.ShowDialog(AppDialog.Theme)) },
+                                        onHeaderClick = { onEvent(AppEvent.ShowDialog(AppDialog.Header)) },
+                                        onSetHomeListBottomAligned = {
+                                            onEvent(AppEvent.UpdateSetting(SettingChange.SetHomeListBottomAligned(it)))
+                                        },
+                                        onSetShowAlbumCover = {
+                                            onEvent(AppEvent.UpdateSetting(SettingChange.SetShowAlbumCover(it)))
+                                        },
+                                        onSetShowWhenLocked = {
+                                            onEvent(AppEvent.UpdateSetting(SettingChange.SetShowWhenLocked(it)))
+                                        },
+                                        onSetTimerEnabled = {
+                                            onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerEnabled(it)))
+                                        },
+                                        onSetWaitForCurrentEnd = {
+                                            onEvent(AppEvent.UpdateSetting(SettingChange.SetWaitForCurrentEnd(it)))
+                                        },
+                                        onSeekStepClick = { onEvent(AppEvent.ShowDialog(AppDialog.SeekStep)) },
+                                        onTimerDurationClick = { onEvent(AppEvent.ShowDialog(AppDialog.TimerDuration)) },
+                                        onOpenLibrary = { onEvent(AppEvent.SelectScreen(AppScreen.LIBRARY_SETTINGS)) },
+                                    )
+                                }
+                                PlaybackControls(
+                                    state = state.playback,
+                                    onPlayPause = togglePlayback,
+                                    onNext = { dispatchPlayback(PlaybackCommand.Next) },
+                                    onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
+                                    onOpenPlayer = { onEvent(AppEvent.SelectScreen(AppScreen.PLAYER)) },
+                                    onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
+                                )
+                            }
                             AppScreen.LIBRARY_SETTINGS -> error("Library settings is outside the main pager")
                         }
                     }
@@ -159,19 +182,6 @@ fun LocalAudioApp(
             }
 
             val pagerScreen = if (isLibrarySettings) state.screen else screenForMainPage(pagerState.currentPage)
-            if (pagerScreen != AppScreen.PLAYER && !isLibrarySettings) {
-                PlaybackBar(
-                    state = state.playback,
-                    onPlayPause = togglePlayback,
-                    onNext = { dispatchPlayback(PlaybackCommand.Next) },
-                    onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
-                    onOpenPlayer = { onEvent(AppEvent.SelectScreen(AppScreen.PLAYER)) },
-                )
-                PlaybackProgressSlider(
-                    state = state.playback,
-                    onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
-                )
-            }
             if (!isLibrarySettings) {
                 BottomNavigation(pagerScreen) { onEvent(AppEvent.SelectScreen(it)) }
             }
@@ -179,6 +189,28 @@ fun LocalAudioApp(
 
         AppDialogs(state = state, onEvent = onEvent)
     }
+}
+
+@Composable
+private fun PlaybackControls(
+    state: PlaybackState,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
+    onOpenPlayer: () -> Unit,
+    onSeekTo: (Long) -> Unit,
+) {
+    PlaybackBar(
+        state = state,
+        onPlayPause = onPlayPause,
+        onNext = onNext,
+        onPrevious = onPrevious,
+        onOpenPlayer = onOpenPlayer,
+    )
+    PlaybackProgressSlider(
+        state = state,
+        onSeekTo = onSeekTo,
+    )
 }
 
 @Composable
