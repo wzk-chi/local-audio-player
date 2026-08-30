@@ -16,7 +16,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,8 +24,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.localaudio.player.R
 import com.localaudio.player.app.AppDialog
@@ -186,41 +183,24 @@ fun LocalAudioApp(
 
 @Composable
 private fun BottomNavigation(screen: AppScreen, onScreenSelected: (AppScreen) -> Unit) {
-    val itemColors = NavigationBarItemDefaults.colors(
-        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        selectedTextColor = MaterialTheme.colorScheme.onSurface,
-        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-
-    NavigationBar(
-        modifier = Modifier
-            .padding(start = 12.dp, top = 4.dp, end = 12.dp, bottom = 8.dp)
-            .clip(MaterialTheme.shapes.large),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 0.dp,
-    ) {
+    NavigationBar {
         NavigationBarItem(
             selected = screen == AppScreen.HOME,
             onClick = { onScreenSelected(AppScreen.HOME) },
             icon = { Icon(Icons.Filled.Home, contentDescription = stringResource(R.string.nav_home)) },
             label = { Text(stringResource(R.string.nav_home)) },
-            colors = itemColors,
         )
         NavigationBarItem(
             selected = screen == AppScreen.PLAYER,
             onClick = { onScreenSelected(AppScreen.PLAYER) },
             icon = { Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(R.string.nav_player)) },
             label = { Text(stringResource(R.string.nav_player)) },
-            colors = itemColors,
         )
         NavigationBarItem(
             selected = screen == AppScreen.SETTINGS || screen == AppScreen.LIBRARY_SETTINGS,
             onClick = { onScreenSelected(AppScreen.SETTINGS) },
             icon = { Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.nav_settings)) },
             label = { Text(stringResource(R.string.nav_settings)) },
-            colors = itemColors,
         )
     }
 }
