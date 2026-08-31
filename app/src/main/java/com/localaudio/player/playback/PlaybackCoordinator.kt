@@ -2,6 +2,7 @@ package com.localaudio.player.playback
 
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import com.localaudio.player.data.model.AudioItem
 import com.localaudio.player.data.settings.FADE_DURATION_STEP_MS
 import com.localaudio.player.data.settings.MAX_FADE_DURATION_MS
@@ -12,7 +13,6 @@ import com.localaudio.player.data.skip.DirectorySkipRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlin.math.min
 
 class PlaybackCoordinator(
     private val settingsRepository: SettingsRepository,
@@ -37,19 +37,29 @@ class PlaybackCoordinator(
     private var timerState = SleepTimerState()
     private var tickScheduled = false
     private var fadeInComplete = true
-    private var fadeOutActive = false
+    private var fadeInStartedAtMs: Long? = null
     private var fadeTickActive = false
+    private var outputVolume = 1f
+    private var fadeOutStartedAtMs = 0L
+    private var fadeOutStartVolume = 1f
+    private var pendingTrackSelection: TrackSelection? = null
     private var autoSkipPreview: AutoSkipPreview? = null
 
     private val tick = object : Runnable {
         override fun run() {
             tickScheduled = false
             checkTimer()
-            checkAutoSkipPreview()
-            checkAutoSkip()
-            updateFadeVolume()
+            if (pendingTrackSelection == null) {
+                checkAutoSkipPreview()
+                checkAutoSkip()
+                updateFadeVolume()
+            } else {
+                updateFadeOut()
+            }
             publishState()
-            if (player?.isPlaying() == true || timerState.expireAt > 0L || timerState.waitingForTrackEnd) {
+            if (player?.isPlaying() == true || timerState.expireAt > 0L ||
+                timerState.waitingForTrackEnd || pendingTrackSelection != null
+            ) {
                 scheduleTick()
             }
         }
@@ -122,22 +132,32 @@ class PlaybackCoordinator(
     private fun playQueue(items: List<AudioItem>, index: Int) {
         if (items.isEmpty()) return
         autoSkipPreview = null
-        queue = items.toList()
-        currentIndex = index.coerceIn(0, queue.lastIndex)
         consecutiveLoadFailures = 0
-        selectTrack(currentIndex, shouldPlay = true, restartAutomaticTimer = true)
+        selectTrack(
+            index = index,
+            shouldPlay = true,
+            restartAutomaticTimer = true,
+            targetQueue = items.toList(),
+            fadeOut = true,
+        )
     }
 
     private fun jumpToItem(index: Int) {
         if (index !in queue.indices) return
         consecutiveLoadFailures = 0
-        selectTrack(index, shouldPlay = true, restartAutomaticTimer = true)
+        selectTrack(
+            index = index,
+            shouldPlay = true,
+            restartAutomaticTimer = true,
+            fadeOut = true,
+        )
     }
 
     private fun previewAutoSkip(items: List<AudioItem>, index: Int, startMs: Long, endMs: Long) {
         val start = startMs.coerceAtLeast(0L)
         val end = endMs.coerceAtLeast(0L)
         if (items.isEmpty() || end <= start) return
+        cancelPendingTrackSelection()
         queue = items.toList()
         currentIndex = index.coerceIn(0, queue.lastIndex)
         consecutiveLoadFailures = 0
@@ -167,7 +187,12 @@ class PlaybackCoordinator(
             loadCurrent()
             return
         }
-        skipCurrentSegmentIfNeeded()
+        if (!currentPlayer.isPlaying()) {
+            restartFadeIn(startImmediately = true)
+        }
+        if (skipCurrentSegmentIfNeeded()) {
+            restartFadeIn(startImmediately = true)
+        }
         updateFadeVolume()
         if (!currentPlayer.play()) {
             desiredPlaying = false
@@ -180,6 +205,7 @@ class PlaybackCoordinator(
     }
 
     private fun pause() {
+        cancelPendingTrackSelection()
         desiredPlaying = false
         pausePlayer()
         persistPlayback()
@@ -218,6 +244,7 @@ class PlaybackCoordinator(
                     index = move.index,
                     shouldPlay = shouldPlay,
                     restartAutomaticTimer = shouldPlay,
+                    fadeOut = true,
                 )
             }
 
@@ -226,10 +253,14 @@ class PlaybackCoordinator(
     }
 
     private fun seekTo(positionMs: Long) {
+        cancelPendingTrackSelection()
         val target = positionMs.coerceIn(0L, currentDuration())
         savedPositionMs = target
         pendingSeekMs = target
-        player?.seekTo(target)
+        val currentPlayer = player
+        val wasPlaying = currentPlayer?.isPlaying() == true
+        currentPlayer?.seekTo(target)
+        restartFadeIn(startImmediately = wasPlaying)
         persistPlayback()
         publishState()
     }
@@ -268,14 +299,31 @@ class PlaybackCoordinator(
         index: Int,
         shouldPlay: Boolean,
         restartAutomaticTimer: Boolean,
+        targetQueue: List<AudioItem> = queue,
+        fadeOut: Boolean = false,
     ) {
+        if (targetQueue.isEmpty()) return
         autoSkipPreview = null
-        currentIndex = index
+        val selection = TrackSelection(
+            queue = targetQueue,
+            index = index.coerceIn(0, targetQueue.lastIndex),
+            shouldPlay = shouldPlay,
+            restartAutomaticTimer = restartAutomaticTimer,
+        )
+        if (fadeOut && startTrackTransition(selection)) return
+        applyTrackSelection(selection)
+    }
+
+    private fun applyTrackSelection(selection: TrackSelection) {
+        pendingTrackSelection = null
+        autoSkipPreview = null
+        queue = selection.queue
+        currentIndex = selection.index
         savedPositionMs = 0L
         pendingSeekMs = null
-        desiredPlaying = shouldPlay
+        desiredPlaying = selection.shouldPlay
         resetFadeForTrack()
-        if (restartAutomaticTimer) startAutomaticTimer()
+        if (selection.restartAutomaticTimer) startAutomaticTimer()
         loadCurrent()
     }
 
@@ -286,12 +334,11 @@ class PlaybackCoordinator(
         savedPositionMs = target
         pendingSeekMs = null
         if (target > 0L) currentPlayer.seekTo(target)
-        val settings = settingsRepository.state.value
-        fadeInComplete = !settings.fadeEnabled || target >= settings.fadeDurationMs
-        fadeOutActive = false
-        updateFadeVolume(target)
+        restartFadeIn(startImmediately = false)
+        updateFadeVolume()
         if (desiredPlaying) {
             skipCurrentSegmentIfNeeded()
+            restartFadeIn(startImmediately = true)
             updateFadeVolume()
             if (currentPlayer.play()) {
                 scheduleTick()
@@ -306,6 +353,10 @@ class PlaybackCoordinator(
     private fun handleTerminal(failed: Boolean) {
         if (handledTerminalGeneration == currentGeneration) return
         handledTerminalGeneration = currentGeneration
+        pendingTrackSelection?.let {
+            applyTrackSelection(it)
+            return
+        }
         if (autoSkipPreview?.audioKey == queue.getOrNull(currentIndex)?.key) {
             if (player?.isPrepared == true) savedPositionMs = player?.positionMs() ?: savedPositionMs
             desiredPlaying = false
@@ -359,6 +410,7 @@ class PlaybackCoordinator(
                     index = move.index,
                     shouldPlay = shouldPlay,
                     restartAutomaticTimer = manual && shouldPlay,
+                    fadeOut = manual,
                 )
             }
 
@@ -388,6 +440,7 @@ class PlaybackCoordinator(
         ) {
             TimerDecision.None -> Unit
             TimerDecision.StopNow -> {
+                cancelPendingTrackSelection()
                 desiredPlaying = false
                 pausePlayer()
                 timerState = sleepTimer.stop()
@@ -402,7 +455,9 @@ class PlaybackCoordinator(
 
     private fun checkAutoSkip() {
         if (player?.isPlaying() != true) return
-        skipCurrentSegmentIfNeeded()
+        if (skipCurrentSegmentIfNeeded()) {
+            restartFadeIn(startImmediately = true)
+        }
     }
 
     private fun checkAutoSkipPreview() {
@@ -423,52 +478,121 @@ class PlaybackCoordinator(
     }
 
     private fun resetFadeForTrack() {
-        fadeInComplete = !settingsRepository.state.value.fadeEnabled
-        fadeOutActive = false
-        fadeTickActive = !fadeInComplete
+        val fadeEnabled = settingsRepository.state.value.fadeEnabled
+        fadeInComplete = !fadeEnabled
+        fadeInStartedAtMs = null
+        fadeTickActive = false
+        outputVolume = if (fadeEnabled) 0f else 1f
     }
 
-    private fun updateFadeVolume(positionOverrideMs: Long? = null): Boolean {
+    private fun restartFadeIn(startImmediately: Boolean) {
+        val settings = settingsRepository.state.value
+        if (!settings.fadeEnabled) {
+            fadeInComplete = true
+            fadeInStartedAtMs = null
+            fadeTickActive = false
+            setOutputVolume(player, 1f)
+            return
+        }
+        fadeInComplete = false
+        fadeInStartedAtMs = if (startImmediately) SystemClock.uptimeMillis() else null
+        fadeTickActive = startImmediately
+        setOutputVolume(player, 0f)
+        if (startImmediately) rescheduleFadeTick()
+    }
+
+    private fun updateFadeVolume(): Boolean {
         val currentPlayer = player ?: return false
         if (!currentPlayer.isPrepared) return false
         val settings = settingsRepository.state.value
         if (!settings.fadeEnabled) {
-            currentPlayer.setVolume(1f)
+            setOutputVolume(currentPlayer, 1f)
             fadeInComplete = true
-            fadeOutActive = false
+            fadeInStartedAtMs = null
             fadeTickActive = false
             return false
         }
 
-        val fadeDuration = settings.fadeDurationMs
-            .coerceIn(MIN_FADE_DURATION_MS, MAX_FADE_DURATION_MS)
-            .let { (it / FADE_DURATION_STEP_MS) * FADE_DURATION_STEP_MS }
-        val position = (positionOverrideMs ?: currentPosition()).coerceAtLeast(0L)
-        val duration = currentPlayer.durationMs().coerceAtLeast(0L)
-        var volume = 1f
+        val fadeDuration = fadeDurationMs()
+        var volume = outputVolume
         var active = false
 
         if (!fadeInComplete) {
-            val fadeInProgress = (position.toFloat() / fadeDuration.toFloat()).coerceIn(0f, 1f)
-            volume = min(volume, fadeInProgress)
-            if (position >= fadeDuration) {
-                fadeInComplete = true
+            val startTime = fadeInStartedAtMs
+            val elapsed = if (startTime == null) {
+                0L
             } else {
-                active = true
+                (SystemClock.uptimeMillis() - startTime).coerceAtLeast(0L)
+            }
+            volume = (elapsed.toFloat() / fadeDuration.toFloat()).coerceIn(0f, 1f)
+            if (startTime != null && elapsed >= fadeDuration) {
+                fadeInComplete = true
+                fadeInStartedAtMs = null
+                volume = 1f
+            } else {
+                active = startTime != null
             }
         }
 
-        fadeOutActive = duration > 0L && position >= duration - fadeDuration
-        if (fadeOutActive) {
-            val fadeOutProgress = ((duration - position).toFloat() / fadeDuration.toFloat())
-                .coerceIn(0f, 1f)
-            volume = min(volume, fadeOutProgress)
-            active = true
-        }
-
-        currentPlayer.setVolume(volume)
+        setOutputVolume(currentPlayer, volume)
         fadeTickActive = active
         return active
+    }
+
+    private fun startTrackTransition(selection: TrackSelection): Boolean {
+        val currentPlayer = player
+        if (!settingsRepository.state.value.fadeEnabled ||
+            currentPlayer?.isPrepared != true || !currentPlayer.isPlaying()
+        ) {
+            return false
+        }
+        if (pendingTrackSelection == null) {
+            fadeOutStartedAtMs = SystemClock.uptimeMillis()
+            fadeOutStartVolume = outputVolume
+            fadeTickActive = true
+        }
+        pendingTrackSelection = selection
+        rescheduleFadeTick()
+        return true
+    }
+
+    private fun updateFadeOut() {
+        val selection = pendingTrackSelection ?: return
+        val currentPlayer = player
+        if (!settingsRepository.state.value.fadeEnabled || currentPlayer?.isPrepared != true) {
+            applyTrackSelection(selection)
+            return
+        }
+        val elapsed = (SystemClock.uptimeMillis() - fadeOutStartedAtMs).coerceAtLeast(0L)
+        val progress = (elapsed.toFloat() / fadeDurationMs().toFloat()).coerceIn(0f, 1f)
+        setOutputVolume(currentPlayer, fadeOutStartVolume * (1f - progress))
+        if (progress >= 1f) {
+            applyTrackSelection(selection)
+        }
+    }
+
+    private fun cancelPendingTrackSelection() {
+        if (pendingTrackSelection == null) return
+        pendingTrackSelection = null
+        fadeTickActive = false
+        player?.takeIf { it.isPrepared }?.let { setOutputVolume(it, 1f) }
+    }
+
+    private fun fadeDurationMs(): Long = settingsRepository.state.value.fadeDurationMs
+        .coerceIn(MIN_FADE_DURATION_MS, MAX_FADE_DURATION_MS)
+        .let { (it / FADE_DURATION_STEP_MS) * FADE_DURATION_STEP_MS }
+        .coerceAtLeast(FADE_DURATION_STEP_MS)
+
+    private fun setOutputVolume(currentPlayer: PlatformPlayer?, volume: Float) {
+        val normalized = volume.coerceIn(0f, 1f)
+        outputVolume = normalized
+        currentPlayer?.setVolume(normalized)
+    }
+
+    private fun rescheduleFadeTick() {
+        mainHandler.removeCallbacks(tick)
+        tickScheduled = false
+        scheduleTick()
     }
 
     private fun skipCurrentSegmentIfNeeded(): Boolean {
@@ -576,6 +700,13 @@ class PlaybackCoordinator(
     private data class SkipRange(
         val startMs: Long,
         val endMs: Long,
+    )
+
+    private data class TrackSelection(
+        val queue: List<AudioItem>,
+        val index: Int,
+        val shouldPlay: Boolean,
+        val restartAutomaticTimer: Boolean,
     )
 
     private data class AutoSkipPreview(
