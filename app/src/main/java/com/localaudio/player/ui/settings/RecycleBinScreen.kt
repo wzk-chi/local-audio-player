@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Restore
@@ -249,14 +248,11 @@ private fun RecycleFolderRow(
             .clip(MaterialTheme.shapes.large)
             .clickable(onClick = onOpen),
         leadingContent = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RecycleCheckbox(checked = selected, onCheckedChange = onSelectedChange)
-                Icon(
-                    Icons.Filled.Folder,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-            }
+            Icon(
+                Icons.Filled.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
         },
         headlineContent = {
             Text(
@@ -279,13 +275,7 @@ private fun RecycleFolderRow(
             )
         },
         trailingContent = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Filled.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            RecycleCheckbox(checked = selected, onCheckedChange = onSelectedChange)
         },
         colors = ListItemDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -306,14 +296,11 @@ private fun RecycleAudioRow(
             .clip(MaterialTheme.shapes.medium)
             .clickable { onSelectedChange(!selected) },
         leadingContent = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RecycleCheckbox(checked = selected, onCheckedChange = onSelectedChange)
-                Icon(
-                    Icons.Filled.MusicNote,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.secondary,
-                )
-            }
+            Icon(
+                Icons.Filled.MusicNote,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary,
+            )
         },
         headlineContent = {
             Text(
@@ -330,6 +317,9 @@ private fun RecycleAudioRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
+        },
+        trailingContent = {
+            RecycleCheckbox(checked = selected, onCheckedChange = onSelectedChange)
         },
         colors = ListItemDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
