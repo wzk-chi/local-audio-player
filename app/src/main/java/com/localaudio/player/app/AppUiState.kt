@@ -6,17 +6,26 @@ import com.localaudio.player.data.model.AudioItem
 import com.localaudio.player.data.model.AutoSkipSegment
 import com.localaudio.player.data.model.DirectorySkipRule
 import com.localaudio.player.data.model.FolderLocation
+import com.localaudio.player.data.model.RecycleBinState
 import com.localaudio.player.data.settings.AppSettings
 import com.localaudio.player.data.settings.HomeHeaderMode
 import com.localaudio.player.data.settings.ThemeMode
 import com.localaudio.player.playback.PlaybackCommand
 import com.localaudio.player.playback.PlaybackState
 
-enum class AppScreen { HOME, PLAYER, SETTINGS, LIBRARY_SETTINGS, AUTO_SKIP_SETTINGS }
+enum class AppScreen { HOME, PLAYER, SETTINGS, LIBRARY_SETTINGS, AUTO_SKIP_SETTINGS, RECYCLE_BIN }
+
+sealed interface HomeActionTarget {
+    data class Audio(val item: AudioItem) : HomeActionTarget
+    data class Directory(val location: FolderLocation) : HomeActionTarget
+}
 
 sealed interface AppDialog {
     data object Queue : AppDialog
     data object Mode : AppDialog
+    data class HomeActions(val target: HomeActionTarget) : AppDialog
+    data class Rename(val target: HomeActionTarget) : AppDialog
+    data class Delete(val target: HomeActionTarget, val deleteSource: Boolean = false) : AppDialog
     data class DirectorySkip(val folderUri: String, val relativePath: String) : AppDialog
     data class AutoSkipEditor(
         val audioKey: String,
@@ -42,6 +51,7 @@ data class AppUiState(
     val settings: AppSettings = AppSettings(),
     val autoSkipSegments: List<AutoSkipSegment> = emptyList(),
     val directorySkipRules: List<DirectorySkipRule> = emptyList(),
+    val recycleBin: RecycleBinState = RecycleBinState(),
     val activeAutoSkipMark: ActiveAutoSkipMark? = null,
     val playback: PlaybackState = PlaybackState(),
 )
@@ -73,6 +83,12 @@ sealed interface AppEvent {
     data object LocateCurrent : AppEvent
     data class OpenDirectory(val location: FolderLocation) : AppEvent
     data class PlayAudio(val item: AudioItem) : AppEvent
+    data class ShowHomeActions(val target: HomeActionTarget) : AppEvent
+    data class RenameHomeItem(val target: HomeActionTarget, val name: String) : AppEvent
+    data class DeleteHomeItem(val target: HomeActionTarget, val deleteSource: Boolean) : AppEvent
+    data class RestoreRecycle(val keys: Set<String>) : AppEvent
+    data class CleanRecycle(val keys: Set<String>) : AppEvent
+    data object OpenRecycleBin : AppEvent
     data object StartAutoSkipMark : AppEvent
     data object FinishAutoSkipMark : AppEvent
     data object CancelAutoSkipMark : AppEvent

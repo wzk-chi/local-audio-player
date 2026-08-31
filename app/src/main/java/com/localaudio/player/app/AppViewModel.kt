@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.localaudio.player.data.library.LibraryRepository
 import com.localaudio.player.data.library.LibraryState
+import com.localaudio.player.data.library.RecycleBinRepository
 import com.localaudio.player.data.model.AudioItem
 import com.localaudio.player.data.model.AutoSkipSegment
 import com.localaudio.player.data.model.FolderLocation
@@ -33,6 +34,7 @@ class AppViewModel(
     private val settingsRepository: SettingsRepository,
     private val autoSkipRepository: AutoSkipRepository,
     private val directorySkipRepository: DirectorySkipRepository,
+    private val recycleBinRepository: RecycleBinRepository,
     private val playbackConnection: PlaybackConnection,
     private val homeRowsBuilder: HomeRowsBuilder,
 ) : ViewModel() {
@@ -60,7 +62,7 @@ class AppViewModel(
         .map { VisibleNavigation(it.screen, it.dialog) }
         .distinctUntilChanged()
 
-    private val contentState = combine(
+    private val baseContentState = combine(
         combine(
             homeContent,
             settingsRepository.state,
@@ -82,6 +84,13 @@ class AppViewModel(
         directorySkipRepository.state,
     ) { content, directorySkipRules ->
         content.copy(directorySkipRules = directorySkipRules)
+    }
+
+    private val contentState = combine(
+        baseContentState,
+        recycleBinRepository.state,
+    ) { content, recycleBin ->
+        content.copy(recycleBin = recycleBin)
     }
 
     val uiState: StateFlow<AppUiState> = combine(
@@ -119,6 +128,12 @@ class AppViewModel(
             AppEvent.LocateCurrent -> locateCurrent()
             is AppEvent.OpenDirectory -> updateHomeLocation(event.location)
             is AppEvent.PlayAudio -> playAudio(event.item)
+            is AppEvent.ShowHomeActions -> navigation.update { it.copy(dialog = AppDialog.HomeActions(event.target)) }
+            is AppEvent.RenameHomeItem -> renameHomeItem(event.target, event.name)
+            is AppEvent.DeleteHomeItem -> deleteHomeItem(event.target, event.deleteSource)
+            is AppEvent.RestoreRecycle -> restoreRecycle(event.keys)
+            is AppEvent.CleanRecycle -> cleanRecycle(event.keys)
+            AppEvent.OpenRecycleBin -> navigateTo(AppScreen.RECYCLE_BIN)
             AppEvent.StartAutoSkipMark -> startAutoSkipMark()
             AppEvent.FinishAutoSkipMark -> finishAutoSkipMark()
             AppEvent.CancelAutoSkipMark -> activeAutoSkipMark.value = null
@@ -162,6 +177,7 @@ class AppViewModel(
         when (navigation.value.screen) {
             AppScreen.LIBRARY_SETTINGS -> navigateTo(AppScreen.SETTINGS)
             AppScreen.AUTO_SKIP_SETTINGS -> navigateTo(AppScreen.SETTINGS)
+            AppScreen.RECYCLE_BIN -> navigateTo(AppScreen.SETTINGS)
             AppScreen.PLAYER, AppScreen.SETTINGS -> navigateTo(AppScreen.HOME)
             AppScreen.HOME -> navigation.value.homeLocation?.let { updateHomeLocation(it.parent()) }
         }
@@ -199,6 +215,84 @@ class AppViewModel(
                 PlaybackCommand.PlayQueue(queue, index),
             )
         }
+    }
+
+    private fun renameHomeItem(target: HomeActionTarget, name: String) {
+        navigation.update { it.copy(dialog = null) }
+        when (target) {
+            is HomeActionTarget.Audio -> libraryRepository.renameAudio(target.item, name) { result ->
+                result.onSuccess { updated ->
+                    playbackConnection.dispatch(PlaybackCommand.ReplaceItem(target.item.key, updated))
+                }.onFailure { error -> showMessage(error.message ?: "重命名失败") }
+            }
+            is HomeActionTarget.Directory -> libraryRepository.renameDirectory(target.location, name) { result ->
+                result.onSuccess {
+                    updateHomeLocationAfterDirectoryRename(target.location, name)
+                    updatePlaybackAfterDirectoryRename(target.location, name)
+                }
+                    .onFailure { error -> showMessage(error.message ?: "重命名文件夹失败") }
+            }
+        }
+    }
+
+    private fun deleteHomeItem(target: HomeActionTarget, deleteSource: Boolean) {
+        navigation.update { it.copy(dialog = null) }
+        val callback: (Result<Set<String>>) -> Unit = { result ->
+            result.onSuccess { keys ->
+                playbackConnection.dispatch(PlaybackCommand.RemoveItems(keys))
+            }.onFailure { error -> showMessage(error.message ?: "删除失败") }
+        }
+        when (target) {
+            is HomeActionTarget.Audio -> libraryRepository.deleteAudio(target.item, deleteSource, callback)
+            is HomeActionTarget.Directory -> libraryRepository.deleteDirectory(target.location, deleteSource, callback)
+        }
+    }
+
+    private fun restoreRecycle(keys: Set<String>) {
+        libraryRepository.restoreRecycle(keys) { result ->
+            result.onFailure { error -> showMessage(error.message ?: "还原失败") }
+        }
+    }
+
+    private fun cleanRecycle(keys: Set<String>) {
+        libraryRepository.cleanRecycle(keys) { result ->
+            result.onFailure { error -> showMessage(error.message ?: "清理失败") }
+        }
+    }
+
+    private fun updateHomeLocationAfterDirectoryRename(location: FolderLocation, newName: String) {
+        val current = navigation.value.homeLocation ?: return
+        if (current.folderUri != location.folderUri) return
+        if (location.relativePath.isEmpty()) {
+            navigation.update {
+                it.copy(homeLocation = current.copy(rootName = newName, name = if (current.relativePath.isEmpty()) newName else current.name))
+            }
+        } else if (isInPath(current.relativePath, location.relativePath)) {
+            val parent = location.relativePath.substringBeforeLast('/', "")
+            val newPath = if (parent.isEmpty()) newName else "$parent/$newName"
+            val updatedPath = replacePath(current.relativePath, location.relativePath, newPath)
+            navigation.update {
+                it.copy(homeLocation = current.copy(relativePath = updatedPath, name = updatedPath.substringAfterLast('/')))
+            }
+        }
+    }
+
+    private fun updatePlaybackAfterDirectoryRename(location: FolderLocation, newName: String) {
+        playbackConnection.state.value.queue
+            .filter { item ->
+                item.folderUri == location.folderUri &&
+                    (location.relativePath.isEmpty() || isInPath(item.relativePath, location.relativePath))
+            }
+            .forEach { item ->
+                val updated = if (location.relativePath.isEmpty()) {
+                    item.copy(folderName = newName)
+                } else {
+                    val parent = location.relativePath.substringBeforeLast('/', "")
+                    val newPath = if (parent.isEmpty()) newName else "$parent/$newName"
+                    item.copy(relativePath = replacePath(item.relativePath, location.relativePath, newPath))
+                }
+                playbackConnection.dispatch(PlaybackCommand.ReplaceItem(item.key, updated))
+            }
     }
 
     private fun playAutoSkipAudio(segmentId: String) {
@@ -359,6 +453,14 @@ class AppViewModel(
             updateHomeLocation(null)
         }
         libraryRepository.removeFolder(uri)
+    }
+
+    private companion object {
+        fun isInPath(path: String, parent: String): Boolean =
+            path == parent || (parent.isNotEmpty() && path.startsWith("$parent/"))
+
+        fun replacePath(path: String, oldPath: String, newPath: String): String =
+            if (path == oldPath) newPath else newPath + path.removePrefix(oldPath)
     }
 
     private fun updateSetting(change: SettingChange) {

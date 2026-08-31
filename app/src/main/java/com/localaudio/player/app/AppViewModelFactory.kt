@@ -15,6 +15,7 @@ class AppViewModelFactory(
             settingsRepository = container.settingsRepository,
             autoSkipRepository = container.autoSkipRepository,
             directorySkipRepository = container.directorySkipRepository,
+            recycleBinRepository = container.recycleBinRepository,
             playbackConnection = container.createPlaybackConnection(),
             homeRowsBuilder = HomeRowsBuilder(),
         ) as T

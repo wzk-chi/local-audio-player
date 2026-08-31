@@ -16,12 +16,14 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -47,6 +49,7 @@ import com.localaudio.player.R
 import com.localaudio.player.app.AppDialog
 import com.localaudio.player.app.AppEvent
 import com.localaudio.player.app.AppUiState
+import com.localaudio.player.app.HomeActionTarget
 import com.localaudio.player.app.SettingChange
 import com.localaudio.player.data.settings.AppSettings
 import com.localaudio.player.data.settings.HomeHeaderMode
@@ -84,6 +87,31 @@ internal fun AppDialogs(
                     ),
                 )
                 onEvent(AppEvent.DismissDialog)
+            },
+            onDismiss = { onEvent(AppEvent.DismissDialog) },
+        )
+        is AppDialog.HomeActions -> HomeActionsSheet(
+            target = current.target,
+            onRename = { onEvent(AppEvent.ShowDialog(AppDialog.Rename(current.target))) },
+            onDelete = { onEvent(AppEvent.ShowDialog(AppDialog.Delete(current.target))) },
+            onDismiss = { onEvent(AppEvent.DismissDialog) },
+        )
+        is AppDialog.Rename -> RenameHomeDialog(
+            target = current.target,
+            onSave = { name -> onEvent(AppEvent.RenameHomeItem(current.target, name)) },
+            onDismiss = { onEvent(AppEvent.DismissDialog) },
+        )
+        is AppDialog.Delete -> DeleteHomeDialog(
+            target = current.target,
+            deleteSource = current.deleteSource,
+            onConfirm = { checked ->
+                if (current.deleteSource) {
+                    onEvent(AppEvent.DeleteHomeItem(current.target, true))
+                } else if (checked) {
+                    onEvent(AppEvent.ShowDialog(AppDialog.Delete(current.target, true)))
+                } else {
+                    onEvent(AppEvent.DeleteHomeItem(current.target, false))
+                }
             },
             onDismiss = { onEvent(AppEvent.DismissDialog) },
         )
@@ -223,6 +251,130 @@ internal fun AppDialogs(
         )
         null -> Unit
     }
+}
+
+@Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+private fun HomeActionsSheet(
+    target: HomeActionTarget,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.padding(bottom = 16.dp)) {
+            Text(
+                text = target.displayName(),
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            ListItem(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onRename),
+                headlineContent = { Text("重命名") },
+            )
+            ListItem(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onDelete),
+                headlineContent = { Text("删除", color = MaterialTheme.colorScheme.error) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun RenameHomeDialog(
+    target: HomeActionTarget,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var name by remember(target) { mutableStateOf(target.displayName()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("重命名") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("名称") },
+            )
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_cancel)) }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(name) }, enabled = name.trim().isNotEmpty()) {
+                Text(stringResource(R.string.dialog_save))
+            }
+        },
+    )
+}
+
+@Composable
+private fun DeleteHomeDialog(
+    target: HomeActionTarget,
+    deleteSource: Boolean,
+    onConfirm: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var checked by remember(target) { mutableStateOf(deleteSource) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(if (deleteSource) "确认删除源文件？" else "删除项目？")
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(target.deleteDescription())
+                if (!deleteSource) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { checked = !checked },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            checked = checked,
+                            onCheckedChange = { checked = it },
+                        )
+                        Text("同时删除源文件")
+                    }
+                } else {
+                    Text(
+                        "源文件删除后无法从回收站还原。",
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_cancel)) }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(checked) }) {
+                Text(
+                    if (deleteSource) "确认删除" else stringResource(R.string.dialog_delete),
+                    color = if (deleteSource) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                )
+            }
+        },
+    )
+}
+
+private fun HomeActionTarget.displayName(): String = when (this) {
+    is HomeActionTarget.Audio -> item.title
+    is HomeActionTarget.Directory -> location.name
+}
+
+private fun HomeActionTarget.deleteDescription(): String = when (this) {
+    is HomeActionTarget.Audio -> "确定删除“${item.title}”吗？"
+    is HomeActionTarget.Directory -> "确定删除文件夹“${location.name}”及其中内容吗？"
 }
 
 @Composable

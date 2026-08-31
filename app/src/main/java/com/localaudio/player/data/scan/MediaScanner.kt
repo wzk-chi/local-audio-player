@@ -29,6 +29,7 @@ class MediaScanner(private val context: Context) {
         folderName: String,
         onProgress: (scanned: Int, found: Int) -> Unit,
         onItems: (List<AudioItem>) -> Unit,
+        isUriBlocked: (String) -> Boolean = { false },
     ): List<AudioItem> {
         val resolver = context.contentResolver
         val treeId = DocumentsContract.getTreeDocumentId(folderUri)
@@ -70,7 +71,7 @@ class MediaScanner(private val context: Context) {
                         found += item
                         pending += item
                         if (pending.size >= 25) {
-                            onItems(pending.toList())
+                            onItems(pending.filterNot { isUriBlocked(it.uri.toString()) })
                             pending.clear()
                         }
                     }
@@ -81,7 +82,7 @@ class MediaScanner(private val context: Context) {
 
         try {
             walk(treeId, 0, "")
-            if (pending.isNotEmpty()) onItems(pending.toList())
+            if (pending.isNotEmpty()) onItems(pending.filterNot { isUriBlocked(it.uri.toString()) })
             val result = found.distinctBy { it.key }.map { item ->
                 checkInterrupted()
                 item.copy(

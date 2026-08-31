@@ -102,6 +102,8 @@ class PlaybackCoordinator(
             PlaybackCommand.Previous -> previous()
             is PlaybackCommand.SeekTo -> seekTo(command.positionMs)
             is PlaybackCommand.SeekBy -> seekTo(currentPosition() + command.deltaMs)
+            is PlaybackCommand.RemoveItems -> removeItems(command.keys)
+            is PlaybackCommand.ReplaceItem -> replaceItem(command.oldKey, command.item)
             is PlaybackCommand.SetPlayMode -> setPlayMode(command.repeatMode, command.shuffleEnabled)
             is PlaybackCommand.StartTimer -> startTimer(command.durationMs)
             PlaybackCommand.StopTimer -> stopTimer()
@@ -312,6 +314,50 @@ class PlaybackCoordinator(
         )
         if (fadeOut && startTrackTransition(selection)) return
         applyTrackSelection(selection)
+    }
+
+    private fun replaceItem(oldKey: String, item: AudioItem) {
+        if (queue.none { it.key == oldKey }) return
+        queue = queue.map { if (it.key == oldKey) item else it }
+        persistPlayback()
+        publishState()
+    }
+
+    private fun removeItems(keys: Set<String>) {
+        if (keys.isEmpty() || queue.isEmpty()) return
+        val currentItem = queue.getOrNull(currentIndex)
+        val currentWasRemoved = currentItem?.key in keys
+        val wasPlaying = desiredPlaying || player?.isPlaying() == true
+        val oldIndex = currentIndex
+        val nextQueue = queue.filterNot { it.key in keys }
+        if (nextQueue.isEmpty()) {
+            cancelPendingTrackSelection()
+            desiredPlaying = false
+            player?.release()
+            queue = emptyList()
+            currentIndex = -1
+            savedPositionMs = 0L
+            pendingSeekMs = null
+            persistPlayback()
+            publishState()
+            return
+        }
+        if (currentWasRemoved) {
+            val nextIndex = oldIndex.coerceAtMost(nextQueue.lastIndex)
+            selectTrack(
+                index = nextIndex,
+                shouldPlay = wasPlaying,
+                restartAutomaticTimer = wasPlaying,
+                fadeOut = wasPlaying,
+                targetQueue = nextQueue,
+            )
+        } else {
+            val removedBeforeCurrent = queue.take(oldIndex).count { it.key in keys }
+            queue = nextQueue
+            currentIndex = (oldIndex - removedBeforeCurrent).coerceIn(0, queue.lastIndex)
+            persistPlayback()
+            publishState()
+        }
     }
 
     private fun applyTrackSelection(selection: TrackSelection) {

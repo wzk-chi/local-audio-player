@@ -1,5 +1,6 @@
 package com.localaudio.player.data.skip
 
+import android.net.Uri
 import com.localaudio.player.data.model.AudioItem
 import com.localaudio.player.data.model.AutoSkipSegment
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,6 +73,54 @@ class AutoSkipRepository(
         }
     }
 
+    /** Refreshes the display/playback snapshot after a completed media scan. */
+    fun updateSnapshots(items: List<AudioItem>) {
+        val byUri = items.associateBy { normalizeUri(it.uri.toString()) }
+        val byHash = items.filter { !it.contentHash.isNullOrBlank() }
+            .groupBy { it.contentHash }
+        updateSegments { segments ->
+            segments.map { segment ->
+                val item = byUri[normalizeUri(segment.audioUri)]
+                    ?: byHash[segment.contentHash]?.singleOrNull()
+                item?.let { segment.withAudioSnapshot(it) } ?: segment
+            }
+        }
+    }
+
+    fun updateAudioSnapshot(previousUri: String, item: AudioItem) {
+        updateSegments { segments ->
+            segments.map { segment ->
+                if (segment.contentHash == item.contentHash &&
+                    normalizeUri(segment.audioUri) == normalizeUri(previousUri)
+                ) {
+                    segment.withAudioSnapshot(item)
+                } else {
+                    segment
+                }
+            }
+        }
+    }
+
+    fun updateRootFolderSnapshot(folderUri: String, folderName: String) {
+        updateSegments { segments ->
+            segments.map { segment ->
+                if (segment.folderUri == folderUri) {
+                    segment.copy(folderNameSnapshot = folderName)
+                } else segment
+            }
+        }
+    }
+
+    fun updatePathSnapshot(folderUri: String, oldPath: String, newPath: String) {
+        updateSegments { segments ->
+            segments.map { segment ->
+                if (segment.folderUri == folderUri && isInPath(segment.relativePath, oldPath)) {
+                    segment.copy(relativePath = replacePath(segment.relativePath, oldPath, newPath))
+                } else segment
+            }
+        }
+    }
+
     private fun updateSegments(transform: (List<AutoSkipSegment>) -> List<AutoSkipSegment>) {
         val next = transform(_state.value)
         if (next == _state.value) return
@@ -83,6 +132,16 @@ class AutoSkipRepository(
         executor.execute { runCatching { store.writeSegments(segments) } }
     }
 
+    private fun AutoSkipSegment.withAudioSnapshot(item: AudioItem) = copy(
+        audioUri = item.uri.toString(),
+        folderUri = item.folderUri,
+        titleSnapshot = item.title,
+        folderNameSnapshot = item.folderName,
+        relativePath = item.relativePath,
+    )
+
+    private fun normalizeUri(value: String): String = Uri.parse(value).normalizeScheme().toString()
+
     private fun nextModifiedAtMs(): Long {
         val now = System.currentTimeMillis()
         val latest = _state.value.maxOfOrNull { it.modifiedAtMs } ?: Long.MIN_VALUE
@@ -91,5 +150,13 @@ class AutoSkipRepository(
         } else {
             maxOf(now, latest + 1L)
         }
+    }
+
+    private companion object {
+        fun isInPath(path: String, parent: String): Boolean =
+            path == parent || (parent.isNotEmpty() && path.startsWith("$parent/"))
+
+        fun replacePath(path: String, oldPath: String, newPath: String): String =
+            if (path == oldPath) newPath else newPath + path.removePrefix(oldPath)
     }
 }

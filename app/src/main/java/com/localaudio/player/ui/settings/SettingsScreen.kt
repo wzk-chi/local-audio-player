@@ -37,6 +37,7 @@ import com.localaudio.player.ui.util.durationLabel
 fun SettingsScreen(
     settings: AppSettings,
     folderCount: Int,
+    recycleBinCount: Int,
     autoSkipCount: Int,
     onThemeClick: () -> Unit,
     onHeaderClick: () -> Unit,
@@ -51,6 +52,7 @@ fun SettingsScreen(
     onTimerDurationClick: () -> Unit,
     onOpenAutoSkip: () -> Unit,
     onOpenLibrary: () -> Unit,
+    onOpenRecycleBin: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(title = { Text(stringResource(R.string.settings_title)) })
@@ -156,6 +158,16 @@ fun SettingsScreen(
                             stringResource(R.string.settings_folder_count, folderCount)
                         },
                         onClick = onOpenLibrary,
+                    )
+                    SettingsDivider()
+                    SettingChoiceRow(
+                        title = stringResource(R.string.settings_recycle_bin),
+                        value = if (recycleBinCount == 0) {
+                            stringResource(R.string.settings_recycle_bin_empty)
+                        } else {
+                            stringResource(R.string.settings_recycle_bin_count, recycleBinCount)
+                        },
+                        onClick = onOpenRecycleBin,
                     )
                 }
             }

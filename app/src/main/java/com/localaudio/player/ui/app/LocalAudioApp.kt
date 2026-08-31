@@ -30,6 +30,8 @@ import com.localaudio.player.app.AppDialog
 import com.localaudio.player.app.AppEvent
 import com.localaudio.player.app.AppScreen
 import com.localaudio.player.app.AppUiState
+import com.localaudio.player.app.HomeActionTarget
+import com.localaudio.player.app.HomeRow
 import com.localaudio.player.app.SettingChange
 import com.localaudio.player.playback.PlaybackCommand
 import com.localaudio.player.playback.PlaybackState
@@ -40,6 +42,7 @@ import com.localaudio.player.ui.player.PlaybackProgressSlider
 import com.localaudio.player.ui.player.PlayerScreen
 import com.localaudio.player.ui.settings.LibrarySettingsScreen
 import com.localaudio.player.ui.settings.AutoSkipScreen
+import com.localaudio.player.ui.settings.RecycleBinScreen
 import com.localaudio.player.ui.settings.SettingsScreen
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -57,7 +60,8 @@ fun LocalAudioApp(
         dispatchPlayback(if (state.playback.isPlaying) PlaybackCommand.Pause else PlaybackCommand.Play)
     }
     val isSecondarySettings = state.screen == AppScreen.LIBRARY_SETTINGS ||
-        state.screen == AppScreen.AUTO_SKIP_SETTINGS
+        state.screen == AppScreen.AUTO_SKIP_SETTINGS ||
+        state.screen == AppScreen.RECYCLE_BIN
     val pagerState = rememberPagerState(
         initialPage = mainPageFor(state.screen),
         pageCount = { MAIN_PAGE_COUNT },
@@ -107,6 +111,12 @@ fun LocalAudioApp(
                             onEdit = { onEvent(AppEvent.EditAutoSkipSegment(it)) },
                             onDelete = { onEvent(AppEvent.DeleteAutoSkipSegment(it)) },
                         )
+                        AppScreen.RECYCLE_BIN -> RecycleBinScreen(
+                            state = state.recycleBin,
+                            onBack = { onEvent(AppEvent.Back) },
+                            onRestore = { onEvent(AppEvent.RestoreRecycle(it)) },
+                            onClean = { onEvent(AppEvent.CleanRecycle(it)) },
+                        )
                         else -> error("Unexpected secondary screen: ${state.screen}")
                     }
                 } else {
@@ -127,6 +137,16 @@ fun LocalAudioApp(
                                     onLocateCurrent = { onEvent(AppEvent.LocateCurrent) },
                                     onDirectoryClick = { onEvent(AppEvent.OpenDirectory(it)) },
                                     onAudioClick = { onEvent(AppEvent.PlayAudio(it)) },
+                                    onLongClick = { row ->
+                                        onEvent(
+                                            AppEvent.ShowHomeActions(
+                                                when (row) {
+                                                    is HomeRow.Audio -> HomeActionTarget.Audio(row.item)
+                                                    is HomeRow.Directory -> HomeActionTarget.Directory(row.location)
+                                                },
+                                            ),
+                                        )
+                                    },
                                     onAddFolder = { onEvent(AppEvent.AddFolder) },
                                 )
                                 PlaybackControls(
@@ -170,6 +190,7 @@ fun LocalAudioApp(
                                     SettingsScreen(
                                         settings = state.settings,
                                         folderCount = state.library.folders.size,
+                                        recycleBinCount = state.recycleBin.entryCount,
                                         onThemeClick = { onEvent(AppEvent.ShowDialog(AppDialog.Theme)) },
                                         onHeaderClick = { onEvent(AppEvent.ShowDialog(AppDialog.Header)) },
                                         onSetHomeListBottomAligned = {
@@ -198,6 +219,7 @@ fun LocalAudioApp(
                                         autoSkipCount = state.autoSkipSegments.size,
                                         onOpenAutoSkip = { onEvent(AppEvent.OpenAutoSkipSettings) },
                                         onOpenLibrary = { onEvent(AppEvent.SelectScreen(AppScreen.LIBRARY_SETTINGS)) },
+                                        onOpenRecycleBin = { onEvent(AppEvent.OpenRecycleBin) },
                                     )
                                 }
                                 PlaybackControls(
@@ -212,6 +234,7 @@ fun LocalAudioApp(
                             AppScreen.LIBRARY_SETTINGS, AppScreen.AUTO_SKIP_SETTINGS -> {
                                 error("Secondary settings is outside the main pager")
                             }
+                            AppScreen.RECYCLE_BIN -> error("Recycle bin is outside the main pager")
                         }
                     }
                 }
@@ -276,7 +299,7 @@ private fun BottomNavigation(screen: AppScreen, onScreenSelected: (AppScreen) ->
 private fun mainPageFor(screen: AppScreen): Int = when (screen) {
     AppScreen.HOME -> 0
     AppScreen.PLAYER -> 1
-    AppScreen.SETTINGS, AppScreen.LIBRARY_SETTINGS, AppScreen.AUTO_SKIP_SETTINGS -> 2
+    AppScreen.SETTINGS, AppScreen.LIBRARY_SETTINGS, AppScreen.AUTO_SKIP_SETTINGS, AppScreen.RECYCLE_BIN -> 2
 }
 
 private fun screenForMainPage(page: Int): AppScreen = when (page) {

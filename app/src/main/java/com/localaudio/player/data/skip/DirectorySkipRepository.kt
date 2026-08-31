@@ -43,10 +43,34 @@ class DirectorySkipRepository(
         updateRules { rules -> rules.filterNot { it.folderUri == folderUri } }
     }
 
+    fun updatePath(folderUri: String, oldPath: String, newPath: String) {
+        updateRules { rules ->
+            rules.map { rule ->
+                if (rule.folderUri == folderUri && isInPath(rule.relativePath, oldPath)) {
+                    rule.copy(relativePath = replacePath(rule.relativePath, oldPath, newPath))
+                } else rule
+            }
+        }
+    }
+
+    fun removePath(folderUri: String, path: String) {
+        updateRules { rules ->
+            rules.filterNot { it.folderUri == folderUri && isInPath(it.relativePath, path) }
+        }
+    }
+
     private fun updateRules(transform: (List<DirectorySkipRule>) -> List<DirectorySkipRule>) {
         val next = transform(_state.value)
         if (next == _state.value) return
         _state.value = next
         executor.execute { runCatching { store.writeRules(next) } }
+    }
+
+    private companion object {
+        fun isInPath(path: String, parent: String): Boolean =
+            path == parent || (parent.isNotEmpty() && path.startsWith("$parent/"))
+
+        fun replacePath(path: String, oldPath: String, newPath: String): String =
+            if (path == oldPath) newPath else newPath + path.removePrefix(oldPath)
     }
 }

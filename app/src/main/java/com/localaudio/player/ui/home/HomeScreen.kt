@@ -1,7 +1,8 @@
 package com.localaudio.player.ui.home
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -71,6 +72,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun HomeScreen(
     modifier: Modifier = Modifier,
     location: FolderLocation?,
@@ -82,6 +84,7 @@ fun HomeScreen(
     onLocateCurrent: () -> Unit,
     onDirectoryClick: (FolderLocation) -> Unit,
     onAudioClick: (AudioItem) -> Unit,
+    onLongClick: (HomeRow) -> Unit,
     onAddFolder: () -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -139,8 +142,8 @@ fun HomeScreen(
                 ) {
                     items(rows, key = { rowKey(it) }) { row ->
                         when (row) {
-                            is HomeRow.Directory -> DirectoryRow(row.location, onDirectoryClick)
-                            is HomeRow.Audio -> AudioRow(row.item, playingKey, onAudioClick)
+                            is HomeRow.Directory -> DirectoryRow(row.location, onDirectoryClick, { onLongClick(row) })
+                            is HomeRow.Audio -> AudioRow(row.item, playingKey, onAudioClick, { onLongClick(row) })
                         }
                     }
                 }
@@ -279,12 +282,17 @@ private fun HomeHeader(
 }
 
 @Composable
-private fun DirectoryRow(location: FolderLocation, onClick: (FolderLocation) -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun DirectoryRow(
+    location: FolderLocation,
+    onClick: (FolderLocation) -> Unit,
+    onLongClick: () -> Unit,
+) {
     ListItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
-            .clickable { onClick(location) },
+            .combinedClickable(onClick = { onClick(location) }, onLongClick = onLongClick),
         headlineContent = { Text(location.name) },
         supportingContent = { Text(stringResource(R.string.home_folder)) },
         leadingContent = {
@@ -300,7 +308,13 @@ private fun DirectoryRow(location: FolderLocation, onClick: (FolderLocation) -> 
 }
 
 @Composable
-private fun AudioRow(item: AudioItem, playingKey: String?, onClick: (AudioItem) -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun AudioRow(
+    item: AudioItem,
+    playingKey: String?,
+    onClick: (AudioItem) -> Unit,
+    onLongClick: () -> Unit,
+) {
     val active = item.key == playingKey
     val titleColor = if (active) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
     val durationColor = if (active) {
@@ -313,7 +327,7 @@ private fun AudioRow(item: AudioItem, playingKey: String?, onClick: (AudioItem) 
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
-            .clickable { onClick(item) },
+            .combinedClickable(onClick = { onClick(item) }, onLongClick = onLongClick),
         headlineContent = {
             Text(
                 text = item.title,
