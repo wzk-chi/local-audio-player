@@ -22,6 +22,11 @@ class AudioDatabase(context: Context) :
             createRecycleItemsTable(db)
             createRecycleFoldersTable(db)
         }
+        if (oldVersion >= VERSION_RECYCLE_BIN && oldVersion < VERSION_RECYCLE_ITEM_ORIGIN) {
+            db.execSQL(
+                "ALTER TABLE $TABLE_RECYCLE_ITEMS ADD COLUMN $COLUMN_DELETED_WITH_FOLDER INTEGER NOT NULL DEFAULT 0",
+            )
+        }
     }
 
     private fun createAudioItemsTable(db: SQLiteDatabase) {
@@ -84,7 +89,8 @@ class AudioDatabase(context: Context) :
                 $COLUMN_FOLDER_URI TEXT NOT NULL,
                 $COLUMN_FOLDER_NAME TEXT NOT NULL,
                 $COLUMN_RELATIVE_PATH TEXT NOT NULL,
-                $COLUMN_DELETED_AT_MS INTEGER NOT NULL
+                $COLUMN_DELETED_AT_MS INTEGER NOT NULL,
+                $COLUMN_DELETED_WITH_FOLDER INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent(),
         )
@@ -136,13 +142,15 @@ class AudioDatabase(context: Context) :
 
         const val TABLE_RECYCLE_ITEMS = "recycle_items"
         const val COLUMN_DELETED_AT_MS = "deleted_at_ms"
+        const val COLUMN_DELETED_WITH_FOLDER = "deleted_with_folder"
 
         const val TABLE_RECYCLE_FOLDERS = "recycle_folders"
         const val COLUMN_ROOT_FOLDER_URI = "root_folder_uri"
 
         private const val DATABASE_NAME = "library.db"
-        private const val DATABASE_VERSION = 3
+        private const val DATABASE_VERSION = 4
         private const val VERSION_AUTO_SKIP_TABLE = 2
         private const val VERSION_RECYCLE_BIN = 3
+        private const val VERSION_RECYCLE_ITEM_ORIGIN = 4
     }
 }

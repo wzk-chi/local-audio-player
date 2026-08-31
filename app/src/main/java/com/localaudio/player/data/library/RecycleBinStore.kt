@@ -67,6 +67,9 @@ class RecycleBinStore(private val database: AudioDatabase) {
             folderName = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_FOLDER_NAME)),
             relativePath = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_RELATIVE_PATH)),
             deletedAtMs = getLong(getColumnIndexOrThrow(AudioDatabase.COLUMN_DELETED_AT_MS)),
+            deletedWithFolder = getInt(
+                getColumnIndexOrThrow(AudioDatabase.COLUMN_DELETED_WITH_FOLDER),
+            ) != 0,
         )
     }.getOrNull()
 
@@ -91,6 +94,7 @@ class RecycleBinStore(private val database: AudioDatabase) {
         put(AudioDatabase.COLUMN_FOLDER_NAME, folderName)
         put(AudioDatabase.COLUMN_RELATIVE_PATH, relativePath)
         put(AudioDatabase.COLUMN_DELETED_AT_MS, deletedAtMs)
+        put(AudioDatabase.COLUMN_DELETED_WITH_FOLDER, if (deletedWithFolder) 1 else 0)
     }
 
     private fun RecycleFolder.toContentValues() = ContentValues().apply {
@@ -113,6 +117,7 @@ class RecycleBinStore(private val database: AudioDatabase) {
             AudioDatabase.COLUMN_FOLDER_NAME,
             AudioDatabase.COLUMN_RELATIVE_PATH,
             AudioDatabase.COLUMN_DELETED_AT_MS,
+            AudioDatabase.COLUMN_DELETED_WITH_FOLDER,
         )
         val FOLDER_COLUMNS = arrayOf(
             AudioDatabase.COLUMN_URI,

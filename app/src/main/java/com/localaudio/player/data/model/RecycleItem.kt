@@ -11,6 +11,8 @@ data class RecycleItem(
     val folderName: String,
     val relativePath: String,
     val deletedAtMs: Long,
+    /** Whether this item was soft-deleted together with its containing folder. */
+    val deletedWithFolder: Boolean = false,
 ) {
     val key: String get() = uri
 }

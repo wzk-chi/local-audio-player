@@ -63,27 +63,18 @@ fun RecycleBinScreen(
         buildRecycleEntries(state)
     }
     var selected by remember(entries) { mutableStateOf(emptySet<String>()) }
-    var openedFolderKey by remember { mutableStateOf<String?>(null) }
+    var folderPath by remember { mutableStateOf(emptyList<String>()) }
     var showCleanConfirmation by remember { mutableStateOf(false) }
-    val openedFolder = entries
-        .asSequence()
-        .filterIsInstance<RecycleEntry.Folder>()
-        .firstOrNull { it.key == openedFolderKey }
+    val openedFolder = remember(entries, folderPath) {
+        findFolder(entries, folderPath)
+    }
     val selectableKeys = remember(entries) {
-        entries.flatMapTo(HashSet()) { entry ->
-            when (entry) {
-                is RecycleEntry.Folder -> buildSet {
-                    add(entry.key)
-                    entry.children.forEach { add("item:${it.key}") }
-                }
-                is RecycleEntry.Audio -> setOf(entry.key)
-            }
-        }
+        entries.flatMapTo(HashSet(), ::selectionKeys)
     }
     val allSelected = selectableKeys.isNotEmpty() && selected.containsAll(selectableKeys)
 
-    BackHandler(enabled = openedFolder != null) {
-        openedFolderKey = null
+    BackHandler(enabled = folderPath.isNotEmpty()) {
+        folderPath = folderPath.dropLast(1)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -91,7 +82,11 @@ fun RecycleBinScreen(
             title = { Text(openedFolder?.title ?: stringResource(R.string.recycle_bin_title)) },
             navigationIcon = {
                 IconButton(onClick = {
-                    if (openedFolder != null) openedFolderKey = null else onBack()
+                    if (folderPath.isNotEmpty()) {
+                        folderPath = folderPath.dropLast(1)
+                    } else {
+                        onBack()
+                    }
                 }) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
@@ -122,14 +117,9 @@ fun RecycleBinScreen(
                 RecycleFolderContents(
                     entry = openedFolder,
                     selected = selected,
-                    onChildSelectedChange = { key, checked ->
-                        val next = if (checked) selected + key else selected - key
-                        val childKeys = openedFolder.children.mapTo(HashSet()) { "item:${it.key}" }
-                        selected = if (childKeys.isNotEmpty() && next.containsAll(childKeys)) {
-                            next + openedFolder.key
-                        } else {
-                            next - openedFolder.key
-                        }
+                    onOpenFolder = { folderPath += it.key },
+                    onSelectionChange = { entry, checked ->
+                        selected = updateSelection(entries, selected, entry, checked)
                     },
                 )
             } else if (entries.isEmpty()) {
@@ -149,14 +139,9 @@ fun RecycleBinScreen(
                             is RecycleEntry.Folder -> RecycleFolderRow(
                                 entry = entry,
                                 selected = entry.key in selected,
-                                onOpen = { openedFolderKey = entry.key },
+                                onOpen = { folderPath += entry.key },
                                 onSelectedChange = { checked ->
-                                    val childKeys = entry.children.mapTo(HashSet()) { "item:${it.key}" }
-                                    selected = if (checked) {
-                                        selected + entry.key + childKeys
-                                    } else {
-                                        selected - entry.key - childKeys
-                                    }
+                                    selected = updateSelection(entries, selected, entry, checked)
                                 },
                             )
                             is RecycleEntry.Audio -> RecycleAudioRow(
@@ -164,7 +149,7 @@ fun RecycleBinScreen(
                                 description = entry.description,
                                 selected = entry.key in selected,
                                 onSelectedChange = { checked ->
-                                    selected = if (checked) selected + entry.key else selected - entry.key
+                                    selected = updateSelection(entries, selected, entry, checked)
                                 },
                             )
                         }
@@ -210,7 +195,8 @@ fun RecycleBinScreen(
 private fun RecycleFolderContents(
     entry: RecycleEntry.Folder,
     selected: Set<String>,
-    onChildSelectedChange: (String, Boolean) -> Unit,
+    onOpenFolder: (RecycleEntry.Folder) -> Unit,
+    onSelectionChange: (RecycleEntry, Boolean) -> Unit,
 ) {
     if (entry.children.isEmpty()) {
         Box(
@@ -230,14 +216,21 @@ private fun RecycleFolderContents(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            items(entry.children, key = { "item:${it.key}" }) { item ->
-                val key = "item:${item.key}"
-                RecycleAudioRow(
-                    title = item.title,
-                    description = displayPath(item.folderName, item.relativePath),
-                    selected = key in selected,
-                    onSelectedChange = { checked -> onChildSelectedChange(key, checked) },
-                )
+            items(entry.children, key = { it.key }) { child ->
+                when (child) {
+                    is RecycleEntry.Folder -> RecycleFolderRow(
+                        entry = child,
+                        selected = child.key in selected,
+                        onOpen = { onOpenFolder(child) },
+                        onSelectedChange = { checked -> onSelectionChange(child, checked) },
+                    )
+                    is RecycleEntry.Audio -> RecycleAudioRow(
+                        title = child.title,
+                        description = child.description,
+                        selected = child.key in selected,
+                        onSelectedChange = { checked -> onSelectionChange(child, checked) },
+                    )
+                }
             }
         }
     }
@@ -256,11 +249,14 @@ private fun RecycleFolderRow(
             .clip(MaterialTheme.shapes.large)
             .clickable(onClick = onOpen),
         leadingContent = {
-            Icon(
-                Icons.Filled.Folder,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RecycleCheckbox(checked = selected, onCheckedChange = onSelectedChange)
+                Icon(
+                    Icons.Filled.Folder,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
         },
         headlineContent = {
             Text(
@@ -274,7 +270,7 @@ private fun RecycleFolderRow(
                 text = if (entry.children.isEmpty()) {
                     entry.description
                 } else {
-                    "${entry.children.size} 个音频 · ${entry.description}"
+                    "${entry.children.sumOf { it.audioCount() }} 个音频 · ${entry.description}"
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -289,7 +285,6 @@ private fun RecycleFolderRow(
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                RecycleCheckbox(checked = selected, onCheckedChange = onSelectedChange)
             }
         },
         colors = ListItemDefaults.colors(
@@ -311,11 +306,14 @@ private fun RecycleAudioRow(
             .clip(MaterialTheme.shapes.medium)
             .clickable { onSelectedChange(!selected) },
         leadingContent = {
-            Icon(
-                Icons.Filled.MusicNote,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RecycleCheckbox(checked = selected, onCheckedChange = onSelectedChange)
+                Icon(
+                    Icons.Filled.MusicNote,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                )
+            }
         },
         headlineContent = {
             Text(
@@ -332,9 +330,6 @@ private fun RecycleAudioRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
-        },
-        trailingContent = {
-            RecycleCheckbox(checked = selected, onCheckedChange = onSelectedChange)
         },
         colors = ListItemDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -408,7 +403,7 @@ private sealed interface RecycleEntry {
 
     data class Folder(
         private val folder: RecycleFolder,
-        val children: List<RecycleItem>,
+        val children: List<RecycleEntry>,
     ) : RecycleEntry {
         override val key: String = "folder:${folder.key}"
         override val title: String = folder.title
@@ -421,39 +416,106 @@ private fun buildRecycleEntries(state: RecycleBinState): List<RecycleEntry> {
     val folders = state.folders.sortedWith(
         compareByDescending<RecycleFolder> { it.deletedAtMs }.thenBy { it.key },
     )
-    val childrenByFolder = folders.associate { it.key to mutableListOf<RecycleItem>() }
+    val parentByFolder = folders.associate { child ->
+        child.key to folders
+            .asSequence()
+            .filter { parent ->
+                parent.key != child.key &&
+                    parent.rootFolderUri == child.rootFolderUri &&
+                    parent.relativePath != child.relativePath &&
+                    isInPath(child.relativePath, parent.relativePath)
+            }
+            .maxByOrNull { it.relativePath.length }
+            ?.key
+    }
+    val childFoldersByParent = folders.groupBy { parentByFolder[it.key] }
+    val itemsByFolder = HashMap<String, MutableList<RecycleItem>>()
     val topLevelItems = mutableListOf<RecycleItem>()
 
     state.items.forEach { item ->
-        val owner = folders
-            .asSequence()
-            .filter { folder ->
-                folder.rootFolderUri == item.folderUri &&
-                    isInPath(item.relativePath, folder.relativePath)
-            }
-            .sortedWith(compareByDescending<RecycleFolder> { it.relativePath.length }.thenBy { it.key })
-            .firstOrNull()
+        val owner = if (item.deletedWithFolder) {
+            folders
+                .asSequence()
+                .filter { folder ->
+                    folder.rootFolderUri == item.folderUri &&
+                        isInPath(item.relativePath, folder.relativePath)
+                }
+                .maxByOrNull { it.relativePath.length }
+        } else {
+            null
+        }
         if (owner == null) {
             topLevelItems += item
         } else {
-            childrenByFolder.getValue(owner.key) += item
+            itemsByFolder.getOrPut(owner.key) { mutableListOf() } += item
         }
     }
 
+    fun buildFolder(folder: RecycleFolder): RecycleEntry.Folder {
+        val children = buildList {
+            childFoldersByParent[folder.key].orEmpty().forEach { add(buildFolder(it)) }
+            itemsByFolder[folder.key].orEmpty().forEach { add(RecycleEntry.Audio(it)) }
+        }.sortedWith(compareByDescending<RecycleEntry> { it.deletedAtMs }.thenBy { it.key })
+        return RecycleEntry.Folder(folder, children)
+    }
+
     return buildList {
-        folders.forEach { folder ->
-            add(
-                RecycleEntry.Folder(
-                    folder = folder,
-                    children = childrenByFolder.getValue(folder.key)
-                        .sortedWith(compareByDescending<RecycleItem> { it.deletedAtMs }.thenBy { it.key }),
-                ),
-            )
-        }
-        topLevelItems
-            .sortedWith(compareByDescending<RecycleItem> { it.deletedAtMs }.thenBy { it.key })
-            .forEach { add(RecycleEntry.Audio(it)) }
+        folders.filter { parentByFolder[it.key] == null }.forEach { add(buildFolder(it)) }
+        topLevelItems.forEach { add(RecycleEntry.Audio(it)) }
     }.sortedWith(compareByDescending<RecycleEntry> { it.deletedAtMs }.thenBy { it.key })
+}
+
+private fun findFolder(entries: List<RecycleEntry>, path: List<String>): RecycleEntry.Folder? {
+    var children = entries
+    var current: RecycleEntry.Folder? = null
+    path.forEach { key ->
+        current = children.filterIsInstance<RecycleEntry.Folder>().firstOrNull { it.key == key }
+        children = current?.children ?: emptyList()
+    }
+    return current
+}
+
+private fun selectionKeys(entry: RecycleEntry): Set<String> = buildSet {
+    add(entry.key)
+    if (entry is RecycleEntry.Folder) {
+        entry.children.forEach { addAll(selectionKeys(it)) }
+    }
+}
+
+private fun updateSelection(
+    entries: List<RecycleEntry>,
+    selected: Set<String>,
+    entry: RecycleEntry,
+    checked: Boolean,
+): Set<String> {
+    val next = selected.toMutableSet()
+    if (checked) {
+        next += selectionKeys(entry)
+    } else {
+        next -= selectionKeys(entry)
+    }
+    return normalizeSelection(entries, next)
+}
+
+private fun normalizeSelection(entries: List<RecycleEntry>, selected: MutableSet<String>): Set<String> {
+    fun normalize(entry: RecycleEntry) {
+        if (entry is RecycleEntry.Folder) {
+            entry.children.forEach(::normalize)
+            val childKeys = entry.children.flatMapTo(HashSet(), ::selectionKeys)
+            if (childKeys.isNotEmpty() && selected.containsAll(childKeys)) {
+                selected += entry.key
+            } else if (childKeys.isNotEmpty()) {
+                selected -= entry.key
+            }
+        }
+    }
+    entries.forEach(::normalize)
+    return selected
+}
+
+private fun RecycleEntry.audioCount(): Int = when (this) {
+    is RecycleEntry.Audio -> 1
+    is RecycleEntry.Folder -> children.sumOf { it.audioCount() }
 }
 
 private fun isInPath(path: String, parent: String): Boolean =

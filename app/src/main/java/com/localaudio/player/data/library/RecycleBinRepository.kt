@@ -22,7 +22,10 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
 
     fun isUriBlocked(uri: String): Boolean = blockedUris().contains(normalizeUri(uri))
 
-    fun entriesFor(keys: Set<String>): Pair<List<RecycleItem>, List<RecycleFolder>> {
+    fun entriesFor(
+        keys: Set<String>,
+        includeUnrelatedItemsInFolders: Boolean = false,
+    ): Pair<List<RecycleItem>, List<RecycleFolder>> {
         val current = _state.value
         val folderKeys = keys.filter { it.startsWith(FOLDER_KEY_PREFIX) }
             .map { it.removePrefix(FOLDER_KEY_PREFIX) }.toSet()
@@ -31,7 +34,9 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
             .map { it.removePrefix(ITEM_KEY_PREFIX) }.toMutableSet()
         folders.forEach { folder ->
             val folderItems = current.items.filter {
-                it.folderUri == folder.rootFolderUri && isInPath(it.relativePath, folder.relativePath)
+                it.folderUri == folder.rootFolderUri &&
+                    (includeUnrelatedItemsInFolders || it.deletedWithFolder) &&
+                    isInPath(it.relativePath, folder.relativePath)
             }
             folderItems.forEach { itemKeys += it.key }
             val folderHashes = folderItems.mapNotNull { it.contentHash }.toSet()
@@ -40,12 +45,16 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         return current.items.filter { it.key in itemKeys } to folders
     }
 
-    fun softDeleteItems(items: List<AudioItem>) {
+    fun softDeleteItems(items: List<AudioItem>, deletedWithFolder: Boolean = false) {
         val now = System.currentTimeMillis()
         val nextItems = _state.value.items.toMutableList()
         items.forEach { item ->
             val existing = nextItems.firstOrNull { normalizeUri(it.uri) == normalizeUri(item.uri.toString()) }
-            val replacement = item.toRecycleItem(existing?.deletedAtMs ?: now, existing)
+            val replacement = item.toRecycleItem(
+                deletedAtMs = existing?.deletedAtMs ?: now,
+                existing = existing,
+                deletedWithFolder = deletedWithFolder,
+            )
             nextItems.removeAll { normalizeUri(it.uri) == normalizeUri(item.uri.toString()) }
             nextItems += replacement
         }
@@ -103,11 +112,6 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         val expanded = entriesFor(keys)
         val itemKeys = expanded.first.mapTo(HashSet()) { it.key }
         val folderKeys = expanded.second.mapTo(HashSet()) { it.key }
-        current.folders.filter { folder ->
-            expanded.first.any { item ->
-                item.folderUri == folder.rootFolderUri && isInPath(item.relativePath, folder.relativePath)
-            }
-        }.forEach { folderKeys += it.key }
         val next = current.copy(
             items = current.items.filterNot { it.key in itemKeys },
             folders = current.folders.filterNot { it.key in folderKeys },
@@ -147,9 +151,9 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         )
     }
 
-    fun remove(keys: Set<String>) {
+    fun remove(keys: Set<String>, includeUnrelatedItemsInFolders: Boolean = false) {
         val current = _state.value
-        val (items, folders) = entriesFor(keys)
+        val (items, folders) = entriesFor(keys, includeUnrelatedItemsInFolders)
         val itemKeys = items.mapTo(HashSet()) { it.key }
         val folderKeys = folders.mapTo(HashSet()) { it.key }
         updateState(
@@ -169,6 +173,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
     private fun AudioItem.toRecycleItem(
         deletedAtMs: Long,
         existing: RecycleItem?,
+        deletedWithFolder: Boolean = false,
     ) = RecycleItem(
         uri = uri.toString(),
         contentHash = contentHash ?: existing?.contentHash,
@@ -179,6 +184,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         folderName = folderName,
         relativePath = relativePath,
         deletedAtMs = deletedAtMs,
+        deletedWithFolder = deletedWithFolder || existing?.deletedWithFolder == true,
     )
 
     private fun normalizeUri(value: String): String = Uri.parse(value).normalizeScheme().toString()

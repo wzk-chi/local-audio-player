@@ -190,7 +190,7 @@ class LibraryRepository(
                     deletedAtMs = System.currentTimeMillis(),
                 )
                 post {
-                    recycleBinRepository.softDeleteItems(targets)
+                    recycleBinRepository.softDeleteItems(targets, deletedWithFolder = true)
                     recycleBinRepository.softDeleteFolder(recycleFolder)
                     removeLibraryDirectory(location, targets)
                     persistLibrary()
@@ -336,7 +336,10 @@ class LibraryRepository(
     }
 
     fun cleanRecycle(keys: Set<String>, onResult: (Result<Unit>) -> Unit) {
-        val (items, folders) = recycleBinRepository.entriesFor(keys)
+        val (items, folders) = recycleBinRepository.entriesFor(
+            keys,
+            includeUnrelatedItemsInFolders = true,
+        )
         if (items.isEmpty() && folders.isEmpty()) {
             post { onResult(Result.failure(IllegalArgumentException("没有可清理的项目"))) }
             return
@@ -346,7 +349,15 @@ class LibraryRepository(
             .forEach(::cancelScan)
         fileOperationExecutor.execute {
             var success = true
-            folders.forEach { folder ->
+            val foldersToDelete = folders.filterNot { folder ->
+                folders.any { parent ->
+                    parent.key != folder.key &&
+                        parent.rootFolderUri == folder.rootFolderUri &&
+                        parent.relativePath != folder.relativePath &&
+                        isInPath(folder.relativePath, parent.relativePath)
+                }
+            }
+            foldersToDelete.forEach { folder ->
                 val deleted = runCatching {
                     DocumentsContract.deleteDocument(context.contentResolver, Uri.parse(folder.uri))
                 }.getOrDefault(false)
@@ -366,7 +377,7 @@ class LibraryRepository(
             }
             post {
                 if (success) {
-                    recycleBinRepository.remove(keys)
+                    recycleBinRepository.remove(keys, includeUnrelatedItemsInFolders = true)
                     onResult(Result.success(Unit))
                 } else {
                     onResult(Result.failure(IllegalStateException("部分源文件无法清理")))
