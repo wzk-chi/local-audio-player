@@ -436,7 +436,7 @@ private fun buildRecycleEntries(state: RecycleBinState): List<RecycleEntry> {
     }
 
     state.items.forEach { item ->
-        if (item.deletedWithFolder) {
+        if (item.deletedByFolderUri != null) {
             ensureNode(item.folderUri, item.relativePath).items += item
         } else {
             topLevelItems += item

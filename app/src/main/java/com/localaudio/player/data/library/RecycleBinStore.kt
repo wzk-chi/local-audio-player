@@ -3,7 +3,6 @@ package com.localaudio.player.data.library
 import android.content.ContentValues
 import android.database.Cursor
 import com.localaudio.player.data.database.AudioDatabase
-import com.localaudio.player.data.hash.CONTENT_HASH_ALGORITHM
 import com.localaudio.player.data.model.RecycleFolder
 import com.localaudio.player.data.model.RecycleItem
 
@@ -53,13 +52,8 @@ class RecycleBinStore(private val database: AudioDatabase) {
     }
 
     private fun Cursor.toRecycleItem(): RecycleItem? = runCatching {
-        val hash = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_CONTENT_HASH))
-        val algorithm = getString(
-            getColumnIndexOrThrow(AudioDatabase.COLUMN_CONTENT_HASH_ALGORITHM),
-        )
         RecycleItem(
             uri = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_URI)),
-            contentHash = hash.takeIf { algorithm == CONTENT_HASH_ALGORITHM && !it.isNullOrBlank() },
             title = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_TITLE)),
             artist = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_ARTIST)),
             durationMs = getLong(getColumnIndexOrThrow(AudioDatabase.COLUMN_DURATION_MS)),
@@ -67,9 +61,9 @@ class RecycleBinStore(private val database: AudioDatabase) {
             folderName = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_FOLDER_NAME)),
             relativePath = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_RELATIVE_PATH)),
             deletedAtMs = getLong(getColumnIndexOrThrow(AudioDatabase.COLUMN_DELETED_AT_MS)),
-            deletedWithFolder = getInt(
-                getColumnIndexOrThrow(AudioDatabase.COLUMN_DELETED_WITH_FOLDER),
-            ) != 0,
+            deletedByFolderUri = getString(
+                getColumnIndexOrThrow(AudioDatabase.COLUMN_DELETED_BY_FOLDER_URI),
+            ),
         )
     }.getOrNull()
 
@@ -83,10 +77,6 @@ class RecycleBinStore(private val database: AudioDatabase) {
 
     private fun RecycleItem.toContentValues() = ContentValues().apply {
         put(AudioDatabase.COLUMN_URI, uri)
-        contentHash?.let {
-            put(AudioDatabase.COLUMN_CONTENT_HASH_ALGORITHM, CONTENT_HASH_ALGORITHM)
-            put(AudioDatabase.COLUMN_CONTENT_HASH, it)
-        }
         put(AudioDatabase.COLUMN_TITLE, title)
         put(AudioDatabase.COLUMN_ARTIST, artist)
         put(AudioDatabase.COLUMN_DURATION_MS, durationMs)
@@ -94,7 +84,7 @@ class RecycleBinStore(private val database: AudioDatabase) {
         put(AudioDatabase.COLUMN_FOLDER_NAME, folderName)
         put(AudioDatabase.COLUMN_RELATIVE_PATH, relativePath)
         put(AudioDatabase.COLUMN_DELETED_AT_MS, deletedAtMs)
-        put(AudioDatabase.COLUMN_DELETED_WITH_FOLDER, if (deletedWithFolder) 1 else 0)
+        put(AudioDatabase.COLUMN_DELETED_BY_FOLDER_URI, deletedByFolderUri)
     }
 
     private fun RecycleFolder.toContentValues() = ContentValues().apply {
@@ -108,8 +98,6 @@ class RecycleBinStore(private val database: AudioDatabase) {
     private companion object {
         val ITEM_COLUMNS = arrayOf(
             AudioDatabase.COLUMN_URI,
-            AudioDatabase.COLUMN_CONTENT_HASH_ALGORITHM,
-            AudioDatabase.COLUMN_CONTENT_HASH,
             AudioDatabase.COLUMN_TITLE,
             AudioDatabase.COLUMN_ARTIST,
             AudioDatabase.COLUMN_DURATION_MS,
@@ -117,7 +105,7 @@ class RecycleBinStore(private val database: AudioDatabase) {
             AudioDatabase.COLUMN_FOLDER_NAME,
             AudioDatabase.COLUMN_RELATIVE_PATH,
             AudioDatabase.COLUMN_DELETED_AT_MS,
-            AudioDatabase.COLUMN_DELETED_WITH_FOLDER,
+            AudioDatabase.COLUMN_DELETED_BY_FOLDER_URI,
         )
         val FOLDER_COLUMNS = arrayOf(
             AudioDatabase.COLUMN_URI,

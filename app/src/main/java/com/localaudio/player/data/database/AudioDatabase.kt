@@ -18,14 +18,11 @@ class AudioDatabase(context: Context) :
         if (oldVersion < VERSION_AUTO_SKIP_TABLE) {
             createAutoSkipSegmentsTable(db)
         }
-        if (oldVersion < VERSION_RECYCLE_BIN) {
+        if (oldVersion < VERSION_RECYCLE_SCOPE) {
+            db.execSQL("DROP TABLE IF EXISTS $TABLE_RECYCLE_ITEMS")
+            db.execSQL("DROP TABLE IF EXISTS $TABLE_RECYCLE_FOLDERS")
             createRecycleItemsTable(db)
             createRecycleFoldersTable(db)
-        }
-        if (oldVersion >= VERSION_RECYCLE_BIN && oldVersion < VERSION_RECYCLE_ITEM_ORIGIN) {
-            db.execSQL(
-                "ALTER TABLE $TABLE_RECYCLE_ITEMS ADD COLUMN $COLUMN_DELETED_WITH_FOLDER INTEGER NOT NULL DEFAULT 0",
-            )
         }
     }
 
@@ -81,8 +78,6 @@ class AudioDatabase(context: Context) :
             """
             CREATE TABLE IF NOT EXISTS $TABLE_RECYCLE_ITEMS (
                 $COLUMN_URI TEXT NOT NULL PRIMARY KEY,
-                $COLUMN_CONTENT_HASH_ALGORITHM TEXT,
-                $COLUMN_CONTENT_HASH TEXT,
                 $COLUMN_TITLE TEXT NOT NULL,
                 $COLUMN_ARTIST TEXT NOT NULL,
                 $COLUMN_DURATION_MS INTEGER NOT NULL,
@@ -90,16 +85,7 @@ class AudioDatabase(context: Context) :
                 $COLUMN_FOLDER_NAME TEXT NOT NULL,
                 $COLUMN_RELATIVE_PATH TEXT NOT NULL,
                 $COLUMN_DELETED_AT_MS INTEGER NOT NULL,
-                $COLUMN_DELETED_WITH_FOLDER INTEGER NOT NULL DEFAULT 0
-            )
-            """.trimIndent(),
-        )
-        db.execSQL(
-            """
-            CREATE INDEX IF NOT EXISTS ${TABLE_RECYCLE_ITEMS}_hash_index
-            ON $TABLE_RECYCLE_ITEMS (
-                $COLUMN_CONTENT_HASH_ALGORITHM,
-                $COLUMN_CONTENT_HASH
+                $COLUMN_DELETED_BY_FOLDER_URI TEXT
             )
             """.trimIndent(),
         )
@@ -142,15 +128,14 @@ class AudioDatabase(context: Context) :
 
         const val TABLE_RECYCLE_ITEMS = "recycle_items"
         const val COLUMN_DELETED_AT_MS = "deleted_at_ms"
-        const val COLUMN_DELETED_WITH_FOLDER = "deleted_with_folder"
+        const val COLUMN_DELETED_BY_FOLDER_URI = "deleted_by_folder_uri"
 
         const val TABLE_RECYCLE_FOLDERS = "recycle_folders"
         const val COLUMN_ROOT_FOLDER_URI = "root_folder_uri"
 
         private const val DATABASE_NAME = "library.db"
-        private const val DATABASE_VERSION = 4
+        private const val DATABASE_VERSION = 5
         private const val VERSION_AUTO_SKIP_TABLE = 2
-        private const val VERSION_RECYCLE_BIN = 3
-        private const val VERSION_RECYCLE_ITEM_ORIGIN = 4
+        private const val VERSION_RECYCLE_SCOPE = 5
     }
 }

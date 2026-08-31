@@ -30,6 +30,7 @@ class MediaScanner(private val context: Context) {
         onProgress: (scanned: Int, found: Int) -> Unit,
         onItems: (List<AudioItem>) -> Unit,
         isUriBlocked: (String) -> Boolean = { false },
+        isDirectoryBlocked: (rootFolderUri: String, documentId: String) -> Boolean = { _, _ -> false },
     ): List<AudioItem> {
         val resolver = context.contentResolver
         val treeId = DocumentsContract.getTreeDocumentId(folderUri)
@@ -42,6 +43,7 @@ class MediaScanner(private val context: Context) {
         fun walk(documentId: String, depth: Int, relativePath: String) {
             checkInterrupted()
             if (depth > MAX_DEPTH) return
+            if (isDirectoryBlocked(folderUri.toString(), documentId)) return
             val children = DocumentsContract.buildChildDocumentsUriUsingTree(folderUri, documentId)
             val cursor = resolver.query(children, PROJECTION, null, null, null)
                 ?: error("无法读取目录：$relativePath")

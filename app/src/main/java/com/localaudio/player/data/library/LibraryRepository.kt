@@ -111,15 +111,10 @@ class LibraryRepository(
             return
         }
         if (!deleteSource) {
-            val targets = if (current.contentHash.isNullOrBlank()) {
-                listOf(current)
-            } else {
-                _state.value.items.filter { it.contentHash == current.contentHash }
-            }
-            recycleBinRepository.softDeleteItems(targets)
-            removeVisibleItems(targets)
+            recycleBinRepository.softDeleteItems(listOf(current))
+            removeVisibleItems(listOf(current))
             persistLibrary()
-            post { onResult(Result.success(targets.mapTo(HashSet()) { it.key })) }
+            post { onResult(Result.success(setOf(current.key))) }
             return
         }
 
@@ -146,7 +141,7 @@ class LibraryRepository(
         onResult: (Result<Set<String>>) -> Unit,
     ) {
         val currentItems = itemsIn(location)
-        if (deleteSource) cancelScan(location.folderUri)
+        cancelScan(location.folderUri)
         fileOperationExecutor.execute {
             val directoryUri = resolveDirectoryUri(location)
             if (directoryUri == null) {
@@ -175,13 +170,6 @@ class LibraryRepository(
                     }
                 }
             } else {
-                val targets = currentItems.flatMap { item ->
-                    if (item.contentHash.isNullOrBlank()) {
-                        listOf(item)
-                    } else {
-                        _state.value.items.filter { it.contentHash == item.contentHash }
-                    }
-                }.distinctBy { it.key }
                 val recycleFolder = RecycleFolder(
                     uri = directoryUri.toString(),
                     rootFolderUri = location.folderUri,
@@ -190,11 +178,14 @@ class LibraryRepository(
                     deletedAtMs = System.currentTimeMillis(),
                 )
                 post {
-                    recycleBinRepository.softDeleteItems(targets, deletedWithFolder = true)
+                    recycleBinRepository.softDeleteItems(
+                        currentItems,
+                        deletedByFolderUri = directoryUri.toString(),
+                    )
                     recycleBinRepository.softDeleteFolder(recycleFolder)
-                    removeLibraryDirectory(location, targets)
+                    removeLibraryDirectory(location, currentItems)
                     persistLibrary()
-                    onResult(Result.success(targets.mapTo(HashSet()) { it.key }))
+                    onResult(Result.success(currentItems.mapTo(HashSet()) { it.key }))
                 }
             }
         }
@@ -273,7 +264,11 @@ class LibraryRepository(
                                 },
                             )
                         }
-                        recycleBinRepository.updateRootFolderName(location.folderUri, name)
+                        recycleBinRepository.updateRootFolderName(
+                            rootFolderUri = location.folderUri,
+                            title = name,
+                            newFolderUri = renamed.toString(),
+                        )
                         autoSkipRepository.updateRootFolderSnapshot(location.folderUri, name)
                     } else {
                         val parentPath = location.relativePath.substringBeforeLast('/', "")
@@ -293,6 +288,8 @@ class LibraryRepository(
                             oldPath = oldPath,
                             newPath = newPath,
                             newTitle = name,
+                            oldFolderUri = directoryUri.toString(),
+                            newFolderUri = renamed.toString(),
                         )
                         autoSkipRepository.updatePathSnapshot(location.folderUri, oldPath, newPath)
                         directorySkipRepository.updatePath(location.folderUri, oldPath, newPath)
@@ -336,10 +333,7 @@ class LibraryRepository(
     }
 
     fun cleanRecycle(keys: Set<String>, onResult: (Result<Unit>) -> Unit) {
-        val (items, folders) = recycleBinRepository.entriesFor(
-            keys,
-            includeUnrelatedItemsInFolders = true,
-        )
+        val (items, folders) = recycleBinRepository.entriesFor(keys)
         if (items.isEmpty() && folders.isEmpty()) {
             post { onResult(Result.failure(IllegalArgumentException("没有可清理的项目"))) }
             return
@@ -349,13 +343,8 @@ class LibraryRepository(
             .forEach(::cancelScan)
         fileOperationExecutor.execute {
             var success = true
-            val foldersToDelete = folders.filterNot { folder ->
-                folders.any { parent ->
-                    parent.key != folder.key &&
-                        parent.rootFolderUri == folder.rootFolderUri &&
-                        parent.relativePath != folder.relativePath &&
-                        isInPath(folder.relativePath, parent.relativePath)
-                }
+            val foldersToDelete = folders.sortedByDescending { folder ->
+                folder.relativePath.count { it == '/' }
             }
             foldersToDelete.forEach { folder ->
                 val deleted = runCatching {
@@ -364,9 +353,9 @@ class LibraryRepository(
                 if (!deleted) success = false
             }
             if (success) {
-                items.filterNot { item ->
-                    folders.any { folder ->
-                        item.folderUri == folder.rootFolderUri && isInPath(item.relativePath, folder.relativePath)
+                items.filter { item ->
+                    item.deletedByFolderUri == null || folders.none { folder ->
+                        sameUri(item.deletedByFolderUri, folder.uri)
                     }
                 }.forEach { item ->
                     val deleted = runCatching {
@@ -377,7 +366,7 @@ class LibraryRepository(
             }
             post {
                 if (success) {
-                    recycleBinRepository.remove(keys, includeUnrelatedItemsInFolders = true)
+                    recycleBinRepository.remove(keys)
                     onResult(Result.success(Unit))
                 } else {
                     onResult(Result.failure(IllegalStateException("部分源文件无法清理")))
@@ -414,6 +403,7 @@ class LibraryRepository(
                         }
                     },
                     isUriBlocked = recycleBinRepository::isUriBlocked,
+                    isDirectoryBlocked = recycleBinRepository::isDirectoryBlocked,
                 )
                 postCurrent(folder.uri, scanToken) {
                     autoSkipRepository.updateSnapshots(result)
@@ -573,6 +563,9 @@ class LibraryRepository(
     }
 
     private companion object {
+        fun sameUri(left: String?, right: String): Boolean =
+            left != null && Uri.parse(left).normalizeScheme() == Uri.parse(right).normalizeScheme()
+
         fun isInPath(path: String, parent: String): Boolean =
             parent.isEmpty() || path == parent || path.startsWith("$parent/")
 
