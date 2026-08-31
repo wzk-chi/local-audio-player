@@ -402,68 +402,105 @@ private sealed interface RecycleEntry {
     }
 
     data class Folder(
-        private val folder: RecycleFolder,
+        private val folder: RecycleFolder?,
+        private val rootFolderUri: String,
+        private val relativePath: String,
         val children: List<RecycleEntry>,
     ) : RecycleEntry {
-        override val key: String = "folder:${folder.key}"
-        override val title: String = folder.title
-        override val description: String = folder.relativePath.ifBlank { "源文件夹" }
-        override val deletedAtMs: Long = folder.deletedAtMs
+        override val key: String = folder?.let { "folder:${it.key}" }
+            ?: "virtual-folder:$rootFolderUri:$relativePath"
+        override val title: String = folder?.title ?: relativePath.substringAfterLast('/')
+        override val description: String = folder?.relativePath?.ifBlank { "源文件夹" } ?: relativePath
+        override val deletedAtMs: Long = folder?.deletedAtMs
+            ?: children.maxOfOrNull { it.deletedAtMs } ?: 0L
     }
 }
 
 private fun buildRecycleEntries(state: RecycleBinState): List<RecycleEntry> {
-    val folders = state.folders.sortedWith(
-        compareByDescending<RecycleFolder> { it.deletedAtMs }.thenBy { it.key },
-    )
-    val parentByFolder = folders.associate { child ->
-        child.key to folders
-            .asSequence()
-            .filter { parent ->
-                parent.key != child.key &&
-                    parent.rootFolderUri == child.rootFolderUri &&
-                    parent.relativePath != child.relativePath &&
-                    isInPath(child.relativePath, parent.relativePath)
-            }
-            .maxByOrNull { it.relativePath.length }
-            ?.key
-    }
-    val childFoldersByParent = folders.groupBy { parentByFolder[it.key] }
-    val itemsByFolder = HashMap<String, MutableList<RecycleItem>>()
+    val folderNodes = HashMap<FolderNodeKey, FolderNode>()
     val topLevelItems = mutableListOf<RecycleItem>()
 
-    state.items.forEach { item ->
-        val owner = if (item.deletedWithFolder) {
-            folders
-                .asSequence()
-                .filter { folder ->
-                    folder.rootFolderUri == item.folderUri &&
-                        isInPath(item.relativePath, folder.relativePath)
-                }
-                .maxByOrNull { it.relativePath.length }
-        } else {
-            null
+    fun ensureNode(rootFolderUri: String, relativePath: String): FolderNode {
+        val rootKey = FolderNodeKey(rootFolderUri, "")
+        val root = folderNodes.getOrPut(rootKey) {
+            FolderNode(rootFolderUri = rootFolderUri, relativePath = "")
         }
-        if (owner == null) {
-            topLevelItems += item
+        var current: FolderNode? = null
+        var currentPath = ""
+        val parts = relativePath.split('/').filter { it.isNotBlank() }
+        if (parts.isEmpty()) {
+            return root
+        }
+        parts.forEach { part ->
+            currentPath = if (currentPath.isEmpty()) part else "$currentPath/$part"
+            val key = FolderNodeKey(rootFolderUri, currentPath)
+            current = folderNodes.getOrPut(key) {
+                FolderNode(rootFolderUri = rootFolderUri, relativePath = currentPath)
+            }
+        }
+        return requireNotNull(current)
+    }
+
+    state.folders.forEach { folder ->
+        ensureNode(folder.rootFolderUri, folder.relativePath).folder = folder
+    }
+
+    state.items.forEach { item ->
+        if (item.deletedWithFolder) {
+            ensureNode(item.folderUri, item.relativePath).items += item
         } else {
-            itemsByFolder.getOrPut(owner.key) { mutableListOf() } += item
+            topLevelItems += item
         }
     }
 
-    fun buildFolder(folder: RecycleFolder): RecycleEntry.Folder {
+    val rootNodes = folderNodes.values.filterTo(LinkedHashSet()) { node ->
+        if (node.relativePath.isEmpty()) {
+            true
+        } else {
+            val parentPath = node.relativePath.substringBeforeLast('/', "")
+            folderNodes[FolderNodeKey(node.rootFolderUri, parentPath)]?.children?.add(node)
+            false
+        }
+    }
+
+    fun buildFolder(node: FolderNode): RecycleEntry.Folder {
         val children = buildList {
-            childFoldersByParent[folder.key].orEmpty().forEach { add(buildFolder(it)) }
-            itemsByFolder[folder.key].orEmpty().forEach { add(RecycleEntry.Audio(it)) }
+            node.children.forEach { add(buildFolder(it)) }
+            node.items.forEach { add(RecycleEntry.Audio(it)) }
         }.sortedWith(compareByDescending<RecycleEntry> { it.deletedAtMs }.thenBy { it.key })
-        return RecycleEntry.Folder(folder, children)
+        return RecycleEntry.Folder(
+            folder = node.folder,
+            rootFolderUri = node.rootFolderUri,
+            relativePath = node.relativePath,
+            children = children,
+        )
     }
 
     return buildList {
-        folders.filter { parentByFolder[it.key] == null }.forEach { add(buildFolder(it)) }
+        rootNodes.forEach { node ->
+            if (node.folder == null && node.relativePath.isEmpty()) {
+                node.children.forEach { add(buildFolder(it)) }
+                node.items.forEach { add(RecycleEntry.Audio(it)) }
+            } else {
+                add(buildFolder(node))
+            }
+        }
         topLevelItems.forEach { add(RecycleEntry.Audio(it)) }
     }.sortedWith(compareByDescending<RecycleEntry> { it.deletedAtMs }.thenBy { it.key })
 }
+
+private data class FolderNodeKey(
+    val rootFolderUri: String,
+    val relativePath: String,
+)
+
+private class FolderNode(
+    val rootFolderUri: String,
+    val relativePath: String,
+    var folder: RecycleFolder? = null,
+    val children: MutableList<FolderNode> = mutableListOf(),
+    val items: MutableList<RecycleItem> = mutableListOf(),
+)
 
 private fun findFolder(entries: List<RecycleEntry>, path: List<String>): RecycleEntry.Folder? {
     var children = entries

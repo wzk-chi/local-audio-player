@@ -194,7 +194,7 @@ fun LocalAudioApp(
                                     SettingsScreen(
                                         settings = state.settings,
                                         folderCount = state.library.folders.size,
-                                        recycleBinCount = state.recycleBin.entryCount,
+                                        recycleBinCount = state.recycleBin.items.size,
                                         onThemeClick = { onEvent(AppEvent.ShowDialog(AppDialog.Theme)) },
                                         onHeaderClick = { onEvent(AppEvent.ShowDialog(AppDialog.Header)) },
                                         onSetHomeListBottomAligned = {
