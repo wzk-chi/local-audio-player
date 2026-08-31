@@ -188,7 +188,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         const val FOLDER_KEY_PREFIX = "folder:"
 
         fun isInPath(path: String, parent: String): Boolean =
-            path == parent || (parent.isNotEmpty() && path.startsWith("$parent/"))
+            parent.isEmpty() || path == parent || path.startsWith("$parent/")
 
         fun replacePath(path: String, oldPath: String, newPath: String): String =
             if (path == oldPath) newPath else newPath + path.removePrefix(oldPath)

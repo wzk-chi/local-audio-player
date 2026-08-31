@@ -484,7 +484,7 @@ private fun buildRecycleEntries(state: RecycleBinState): List<RecycleEntry> {
 }
 
 private fun isInPath(path: String, parent: String): Boolean =
-    path == parent || (parent.isNotEmpty() && path.startsWith("$parent/"))
+    parent.isEmpty() || path == parent || path.startsWith("$parent/")
 
 private fun displayPath(folderName: String, relativePath: String): String =
     if (relativePath.isBlank()) folderName else "$folderName/$relativePath"
