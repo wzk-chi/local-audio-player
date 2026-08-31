@@ -19,9 +19,9 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
 
     val state: StateFlow<RecycleBinState> = _state.asStateFlow()
 
-    fun blockedUris(): Set<String> = _state.value.items.mapTo(HashSet()) { normalizeUri(it.uri) }
-
-    fun isUriBlocked(uri: String): Boolean = blockedUris().contains(normalizeUri(uri))
+    fun isUriBlocked(uri: String): Boolean = _state.value.items.any { item ->
+        sameDocument(item.uri, uri)
+    }
 
     fun isDirectoryBlocked(rootFolderUri: String, documentId: String): Boolean {
         val normalizedRootUri = normalizeUri(rootFolderUri)
@@ -40,7 +40,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
             .map { it.removePrefix(ITEM_KEY_PREFIX) }.toMutableSet()
         folders.forEach { folder ->
             val folderItems = current.items.filter { item ->
-                sameUri(item.deletedByFolderUri, folder.uri)
+                sameDocument(item.deletedByFolderUri, folder.uri)
             }
             folderItems.forEach { itemKeys += it.key }
         }
@@ -51,13 +51,13 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         val now = System.currentTimeMillis()
         val nextItems = _state.value.items.toMutableList()
         items.forEach { item ->
-            val existing = nextItems.firstOrNull { normalizeUri(it.uri) == normalizeUri(item.uri.toString()) }
+            val existing = nextItems.firstOrNull { sameDocument(it.uri, item.uri.toString()) }
             val replacement = item.toRecycleItem(
                 deletedAtMs = existing?.deletedAtMs ?: now,
                 existing = existing,
                 deletedByFolderUri = deletedByFolderUri,
             )
-            nextItems.removeAll { normalizeUri(it.uri) == normalizeUri(item.uri.toString()) }
+            nextItems.removeAll { sameDocument(it.uri, item.uri.toString()) }
             nextItems += replacement
         }
         updateState(_state.value.copy(items = nextItems))
@@ -68,16 +68,38 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         updateState(_state.value.copy(folders = folders))
     }
 
-    /** Filters a completed scan and updates exact URI records that remain in the recycle bin. */
-    fun filterScannedItems(items: List<AudioItem>): List<AudioItem> {
+    /** Filters a completed scan and updates URI/Document ID records that remain in the recycle bin. */
+    fun filterScannedItems(
+        items: List<AudioItem>,
+        rebindRenamedPaths: Boolean = false,
+    ): List<AudioItem> {
         val current = _state.value
         val nextItems = current.items.toMutableList()
         val visible = ArrayList<AudioItem>(items.size)
+        val matchedRecycleIndices = HashSet<Int>()
         items.distinctBy { it.key }.forEach { item ->
-            val existingIndex = nextItems.indexOfFirst {
-                normalizeUri(it.uri) == normalizeUri(item.uri.toString())
+            var existingIndex = nextItems.withIndex().firstOrNull { indexedItem ->
+                !matchedRecycleIndices.contains(indexedItem.index) &&
+                    sameDocument(indexedItem.value.uri, item.uri.toString())
+            }?.index ?: -1
+            if (existingIndex < 0 && rebindRenamedPaths) {
+                val candidateIndices = nextItems.mapIndexedNotNull { index, recycleItem ->
+                    if (
+                        !matchedRecycleIndices.contains(index) &&
+                        sameDocument(recycleItem.folderUri, item.folderUri) &&
+                        recycleItem.relativePath == item.relativePath &&
+                        recycleItem.title == item.title &&
+                        sameDocumentName(recycleItem.uri, item.uri.toString())
+                    ) {
+                        index
+                    } else {
+                        null
+                    }
+                }
+                existingIndex = candidateIndices.singleOrNull() ?: -1
             }
             if (existingIndex >= 0) {
+                matchedRecycleIndices += existingIndex
                 val existing = nextItems[existingIndex]
                 nextItems[existingIndex] = item.toRecycleItem(
                     deletedAtMs = existing.deletedAtMs,
@@ -114,7 +136,6 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         newFolderUri: String,
     ) {
         val current = _state.value
-        val normalizedOldFolderUri = normalizeUri(oldFolderUri)
         val nextItems = current.items.map { item ->
             val nextPath = if (item.folderUri == rootFolderUri && isInPath(item.relativePath, oldPath)) {
                 replacePath(item.relativePath, oldPath, newPath)
@@ -122,12 +143,12 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
                 item.relativePath
             }
             val nextDeletedByFolderUri = item.deletedByFolderUri?.let { deletedByFolderUri ->
-                if (normalizeUri(deletedByFolderUri) == normalizedOldFolderUri) newFolderUri else deletedByFolderUri
+                if (sameDocument(deletedByFolderUri, oldFolderUri)) newFolderUri else deletedByFolderUri
             }
             item.copy(relativePath = nextPath, deletedByFolderUri = nextDeletedByFolderUri)
         }
         val nextFolders = current.folders.map { folder ->
-            val nextUri = if (normalizeUri(folder.uri) == normalizedOldFolderUri) newFolderUri else folder.uri
+            val nextUri = if (sameDocument(folder.uri, oldFolderUri)) newFolderUri else folder.uri
             if (folder.rootFolderUri == rootFolderUri && folder.relativePath == oldPath) {
                 folder.copy(uri = nextUri, relativePath = newPath, title = newTitle)
             } else if (folder.rootFolderUri == rootFolderUri && isInPath(folder.relativePath, oldPath)) {
@@ -146,14 +167,13 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         val currentRootFolderUri = current.folders.firstOrNull {
             it.rootFolderUri == rootFolderUri && it.relativePath.isEmpty()
         }?.uri
-        val normalizedCurrentRootFolderUri = currentRootFolderUri?.let(::normalizeUri)
         updateState(
             current.copy(
                 items = current.items.map { item ->
                     val deletedByFolderUri = if (
                         newFolderUri != null &&
                         item.deletedByFolderUri != null &&
-                        normalizeUri(item.deletedByFolderUri) == normalizedCurrentRootFolderUri
+                        sameDocument(item.deletedByFolderUri, currentRootFolderUri ?: "")
                     ) {
                         newFolderUri
                     } else {
@@ -215,8 +235,24 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         DocumentsContract.getDocumentId(Uri.parse(value))
     }.getOrNull()
 
-    private fun sameUri(left: String?, right: String): Boolean =
-        left != null && normalizeUri(left) == normalizeUri(right)
+    private fun documentKey(value: String): String? = runCatching {
+        val uri = Uri.parse(value)
+        val documentId = documentIdFromUri(value) ?: return@runCatching null
+        "${uri.authority}:${DocumentsContract.getTreeDocumentId(uri)}:$documentId"
+    }.getOrNull()
+
+    private fun sameDocument(left: String?, right: String): Boolean {
+        if (left == null) return false
+        if (normalizeUri(left) == normalizeUri(right)) return true
+        val leftKey = documentKey(left) ?: return false
+        return leftKey == documentKey(right)
+    }
+
+    private fun sameDocumentName(left: String, right: String): Boolean =
+        documentName(left)?.let { it == documentName(right) } == true
+
+    private fun documentName(value: String): String? =
+        documentIdFromUri(value)?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
 
     private companion object {
         const val ITEM_KEY_PREFIX = "item:"

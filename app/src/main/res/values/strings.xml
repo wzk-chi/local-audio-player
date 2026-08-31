@@ -61,7 +61,7 @@
     <string name="settings_no_folders">尚未添加文件夹</string>
     <string name="settings_folder_count">%1$d 个文件夹</string>
     <string name="settings_recycle_bin">回收站</string>
-    <string name="settings_recycle_bin_empty">为空</string>
+    <string name="settings_recycle_bin_empty">空</string>
     <string name="settings_recycle_bin_count">%1$d 个音频</string>
     <string name="recycle_bin_title">回收站</string>
     <string name="recycle_bin_back">返回设置</string>

@@ -295,7 +295,9 @@ class LibraryRepository(
                         directorySkipRepository.updatePath(location.folderUri, oldPath, newPath)
                     }
                     persistLibrary()
-                    _state.value.folders.firstOrNull { it.uri == location.folderUri }?.let(::startScan)
+                    _state.value.folders.firstOrNull { it.uri == location.folderUri }?.let {
+                        startScan(it, rebindRenamedPaths = true)
+                    }
                     onResult(Result.success(Unit))
                 }
             }
@@ -375,7 +377,7 @@ class LibraryRepository(
         }
     }
 
-    private fun startScan(folder: FolderItem) {
+    private fun startScan(folder: FolderItem, rebindRenamedPaths: Boolean = false) {
         jobs[folder.uri]?.cancel(true)
         val scanToken = ++nextScanToken
         scanTokens[folder.uri] = scanToken
@@ -397,9 +399,11 @@ class LibraryRepository(
                     },
                     onItems = { batch ->
                         postCurrent(folder.uri, scanToken) {
-                            val fresh = batch.filter { !recycleBinRepository.isUriBlocked(it.uri.toString()) }
-                                .filter { publishedKeys.add(it.key) }
-                            if (fresh.isNotEmpty()) _state.update { it.copy(items = it.items + fresh) }
+                            if (!rebindRenamedPaths) {
+                                val fresh = batch.filter { !recycleBinRepository.isUriBlocked(it.uri.toString()) }
+                                    .filter { publishedKeys.add(it.key) }
+                                if (fresh.isNotEmpty()) _state.update { it.copy(items = it.items + fresh) }
+                            }
                         }
                     },
                     isUriBlocked = recycleBinRepository::isUriBlocked,
@@ -407,7 +411,10 @@ class LibraryRepository(
                 )
                 postCurrent(folder.uri, scanToken) {
                     autoSkipRepository.updateSnapshots(result)
-                    val visibleResult = recycleBinRepository.filterScannedItems(result)
+                    val visibleResult = recycleBinRepository.filterScannedItems(
+                        result,
+                        rebindRenamedPaths = rebindRenamedPaths,
+                    )
                     val items = (_state.value.items.filterNot { it.folderUri == folder.uri } + visibleResult)
                         .distinctBy { it.key }
                     reconcileAutoSkip(items)
