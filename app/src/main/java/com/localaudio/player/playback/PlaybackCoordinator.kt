@@ -604,7 +604,9 @@ class PlaybackCoordinator(
         val segments = autoSkipPreview
             ?.takeIf { it.audioKey == item.key }
             ?.let { listOf(SkipRange(it.startMs, it.endMs)) }
-            ?: (autoSkipRepository.segmentsFor(item.key)
+            ?: (item.contentHash
+                ?.let { autoSkipRepository.segmentsFor(it) }
+                .orEmpty()
                 .map { SkipRange(it.startMs, it.endMs) } + directorySkipSegments(item, duration))
         val sortedSegments = segments.sortedBy { it.startMs }
         var target = sortedSegments

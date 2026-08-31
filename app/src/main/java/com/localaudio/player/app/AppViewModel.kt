@@ -1,10 +1,12 @@
 package com.localaudio.player.app
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.localaudio.player.data.library.LibraryRepository
 import com.localaudio.player.data.library.LibraryState
 import com.localaudio.player.data.model.AudioItem
+import com.localaudio.player.data.model.AutoSkipSegment
 import com.localaudio.player.data.model.FolderLocation
 import com.localaudio.player.data.settings.AppSettings
 import com.localaudio.player.data.settings.SettingsRepository
@@ -123,7 +125,7 @@ class AppViewModel(
             AppEvent.OpenAutoSkipSettings -> navigateTo(AppScreen.AUTO_SKIP_SETTINGS)
             is AppEvent.DeleteAutoSkipSegment -> autoSkipRepository.delete(event.id)
             is AppEvent.EditAutoSkipSegment -> editAutoSkipSegment(event.id)
-            is AppEvent.PlayAutoSkipAudio -> playAutoSkipAudio(event.audioKey)
+            is AppEvent.PlayAutoSkipAudio -> playAutoSkipAudio(event.segmentId)
             is AppEvent.TestAutoSkipSegment -> testAutoSkipSegment(event)
             is AppEvent.SaveAutoSkipSegment -> saveAutoSkipSegment(event)
             is AppEvent.SaveDirectorySkip -> directorySkipRepository.save(
@@ -199,19 +201,32 @@ class AppViewModel(
         }
     }
 
-    private fun playAutoSkipAudio(audioKey: String) {
-        libraryRepository.state.value.items
-            .firstOrNull { it.key == audioKey }
+    private fun playAutoSkipAudio(segmentId: String) {
+        autoSkipRepository.state.value
+            .firstOrNull { it.id == segmentId }
+            ?.let(::findAudioForSegment)
             ?.let { item ->
                 playAudio(item)
                 navigateTo(AppScreen.PLAYER)
             }
     }
 
+    private fun findAudioForSegment(segment: AutoSkipSegment): AudioItem? {
+        val audioItems = libraryRepository.state.value.items
+        val snapshotKey = Uri.parse(segment.audioUri).normalizeScheme().toString()
+        return audioItems.firstOrNull {
+            it.key == snapshotKey && it.contentHash == segment.contentHash
+        } ?: audioItems.firstOrNull { it.contentHash == segment.contentHash }
+    }
+
     private fun startAutoSkipMark() {
         if (activeAutoSkipMark.value != null) return
         val playback = playbackConnection.state.value
         val item = playback.currentItem ?: return
+        if (item.contentHash.isNullOrBlank()) {
+            showMessage("音频哈希仍在计算，请稍后再试")
+            return
+        }
         activeAutoSkipMark.value = ActiveAutoSkipMark(
             audioKey = item.key,
             startMs = playback.positionMs.coerceAtLeast(0L),
@@ -248,12 +263,12 @@ class AppViewModel(
 
     private fun editAutoSkipSegment(id: String) {
         val segment = autoSkipRepository.state.value.firstOrNull { it.id == id } ?: return
-        val item = libraryRepository.state.value.items.firstOrNull { it.key == segment.audioKey } ?: return
+        val item = findAudioForSegment(segment) ?: return
         val playback = playbackConnection.state.value
         navigation.update {
             it.copy(
                 dialog = AppDialog.AutoSkipEditor(
-                    audioKey = segment.audioKey,
+                    audioKey = item.key,
                     segmentId = segment.id,
                     startMs = segment.startMs,
                     endMs = segment.endMs,
@@ -286,6 +301,10 @@ class AppViewModel(
     private fun saveAutoSkipSegment(event: AppEvent.SaveAutoSkipSegment) {
         val item = libraryRepository.state.value.items.firstOrNull { it.key == event.audioKey } ?: run {
             showMessage("音频已不存在，无法保存自动跳过标记")
+            return
+        }
+        if (item.contentHash.isNullOrBlank()) {
+            showMessage("音频哈希仍在计算，请稍后再保存")
             return
         }
         val playback = playbackConnection.state.value

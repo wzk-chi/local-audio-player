@@ -57,7 +57,11 @@ fun AutoSkipScreen(
                 .thenByDescending { it.id },
         )
     }
-    val audioByKey = remember(audioItems) { audioItems.associateBy { it.key } }
+    val audioByHash = remember(audioItems) {
+        audioItems.mapNotNull { item ->
+            item.contentHash?.takeIf { it.isNotBlank() }?.let { hash -> hash to item }
+        }.toMap()
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -110,11 +114,11 @@ fun AutoSkipScreen(
                                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
                                 )
                             }
-                            val item = audioByKey[segment.audioKey]
+                            val item = audioByHash[segment.contentHash]
                             AutoSkipRow(
                                 segment = segment,
                                 item = item,
-                                onPlay = { onPlay(segment.audioKey) },
+                                onPlay = { onPlay(segment.id) },
                                 onEdit = { onEdit(segment.id) },
                                 onDelete = { segmentToDelete = segment },
                             )

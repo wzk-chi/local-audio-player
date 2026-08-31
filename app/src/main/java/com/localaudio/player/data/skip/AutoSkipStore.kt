@@ -1,58 +1,102 @@
 package com.localaudio.player.data.skip
 
-import android.content.Context
+import android.content.ContentValues
+import android.database.Cursor
+import com.localaudio.player.data.database.AudioDatabase
+import com.localaudio.player.data.hash.CONTENT_HASH_ALGORITHM
 import com.localaudio.player.data.model.AutoSkipSegment
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.File
 
-class AutoSkipStore(context: Context) {
-    private val file = File(context.filesDir, "auto_skip_segments.json")
-
+class AutoSkipStore(private val database: AudioDatabase) {
     fun readSegments(): List<AutoSkipSegment> = runCatching {
-        val root = JSONObject(file.takeIf { it.exists() }?.readText() ?: "{}")
-        val segments = root.optJSONArray("segments") ?: JSONArray()
-        (0 until segments.length()).mapNotNull { index ->
-            decode(segments.optJSONObject(index))
+        database.readableDatabase.query(
+            AudioDatabase.TABLE_AUTO_SKIP_SEGMENTS,
+            SEGMENT_COLUMNS,
+            null,
+            null,
+            null,
+            null,
+            "${AudioDatabase.COLUMN_MODIFIED_AT_MS} ASC, ${AudioDatabase.COLUMN_ID} ASC",
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    cursor.toSegment()?.let(::add)
+                }
+            }
         }.distinctBy { it.id }
     }.getOrDefault(emptyList())
 
     fun writeSegments(segments: List<AutoSkipSegment>) {
-        val values = JSONArray()
-        segments.forEach { values.put(encode(it)) }
-        file.writeText(
-            JSONObject()
-                .put("version", 1)
-                .put("segments", values)
-                .toString(),
-        )
+        val db = database.writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete(AudioDatabase.TABLE_AUTO_SKIP_SEGMENTS, null, null)
+            segments.distinctBy { it.id }.forEach { segment ->
+                db.insertOrThrow(
+                    AudioDatabase.TABLE_AUTO_SKIP_SEGMENTS,
+                    null,
+                    segment.toContentValues(),
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
     }
 
-    private fun encode(segment: AutoSkipSegment): JSONObject = JSONObject()
-        .put("id", segment.id)
-        .put("audioKey", segment.audioKey)
-        .put("audioUri", segment.audioUri)
-        .put("folderUri", segment.folderUri)
-        .put("titleSnapshot", segment.titleSnapshot)
-        .put("folderNameSnapshot", segment.folderNameSnapshot)
-        .put("relativePath", segment.relativePath)
-        .put("startMs", segment.startMs)
-        .put("endMs", segment.endMs)
-        .put("modifiedAtMs", segment.modifiedAtMs)
-
-    private fun decode(json: JSONObject?): AutoSkipSegment? = runCatching {
-        json ?: return@runCatching null
-        AutoSkipSegment(
-            id = json.getString("id"),
-            audioKey = json.getString("audioKey"),
-            audioUri = json.getString("audioUri"),
-            folderUri = json.optString("folderUri"),
-            titleSnapshot = json.optString("titleSnapshot"),
-            folderNameSnapshot = json.optString("folderNameSnapshot"),
-            relativePath = json.optString("relativePath"),
-            startMs = json.getLong("startMs").coerceAtLeast(0L),
-            endMs = json.getLong("endMs").coerceAtLeast(0L),
-            modifiedAtMs = json.optLong("modifiedAtMs", json.optLong("createdAtMs", 0L)),
-        ).takeIf { it.endMs > it.startMs }
+    private fun Cursor.toSegment(): AutoSkipSegment? = runCatching {
+        val contentHash = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_CONTENT_HASH))
+        val hashAlgorithm = getString(
+            getColumnIndexOrThrow(AudioDatabase.COLUMN_CONTENT_HASH_ALGORITHM),
+        )
+        val segment = AutoSkipSegment(
+            id = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_ID)),
+            contentHash = contentHash,
+            audioUri = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_AUDIO_URI)),
+            folderUri = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_FOLDER_URI)),
+            titleSnapshot = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_TITLE_SNAPSHOT)),
+            folderNameSnapshot = getString(
+                getColumnIndexOrThrow(AudioDatabase.COLUMN_FOLDER_NAME_SNAPSHOT),
+            ),
+            relativePath = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_RELATIVE_PATH)),
+            startMs = getLong(getColumnIndexOrThrow(AudioDatabase.COLUMN_START_MS)),
+            endMs = getLong(getColumnIndexOrThrow(AudioDatabase.COLUMN_END_MS)),
+            modifiedAtMs = getLong(getColumnIndexOrThrow(AudioDatabase.COLUMN_MODIFIED_AT_MS)),
+        )
+        segment.takeIf {
+            hashAlgorithm == CONTENT_HASH_ALGORITHM &&
+                contentHash.isNotBlank() &&
+                it.startMs >= 0L &&
+                it.endMs > it.startMs
+        }
     }.getOrNull()
+
+    private fun AutoSkipSegment.toContentValues(): ContentValues = ContentValues().apply {
+        put(AudioDatabase.COLUMN_ID, id)
+        put(AudioDatabase.COLUMN_CONTENT_HASH_ALGORITHM, CONTENT_HASH_ALGORITHM)
+        put(AudioDatabase.COLUMN_CONTENT_HASH, contentHash)
+        put(AudioDatabase.COLUMN_AUDIO_URI, audioUri)
+        put(AudioDatabase.COLUMN_FOLDER_URI, folderUri)
+        put(AudioDatabase.COLUMN_TITLE_SNAPSHOT, titleSnapshot)
+        put(AudioDatabase.COLUMN_FOLDER_NAME_SNAPSHOT, folderNameSnapshot)
+        put(AudioDatabase.COLUMN_RELATIVE_PATH, relativePath)
+        put(AudioDatabase.COLUMN_START_MS, startMs)
+        put(AudioDatabase.COLUMN_END_MS, endMs)
+        put(AudioDatabase.COLUMN_MODIFIED_AT_MS, modifiedAtMs)
+    }
+
+    private companion object {
+        val SEGMENT_COLUMNS = arrayOf(
+            AudioDatabase.COLUMN_ID,
+            AudioDatabase.COLUMN_CONTENT_HASH_ALGORITHM,
+            AudioDatabase.COLUMN_CONTENT_HASH,
+            AudioDatabase.COLUMN_AUDIO_URI,
+            AudioDatabase.COLUMN_FOLDER_URI,
+            AudioDatabase.COLUMN_TITLE_SNAPSHOT,
+            AudioDatabase.COLUMN_FOLDER_NAME_SNAPSHOT,
+            AudioDatabase.COLUMN_RELATIVE_PATH,
+            AudioDatabase.COLUMN_START_MS,
+            AudioDatabase.COLUMN_END_MS,
+            AudioDatabase.COLUMN_MODIFIED_AT_MS,
+        )
+    }
 }

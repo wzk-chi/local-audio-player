@@ -79,7 +79,7 @@ sealed interface AppEvent {
     data object OpenAutoSkipSettings : AppEvent
     data class DeleteAutoSkipSegment(val id: String) : AppEvent
     data class EditAutoSkipSegment(val id: String) : AppEvent
-    data class PlayAutoSkipAudio(val audioKey: String) : AppEvent
+    data class PlayAutoSkipAudio(val segmentId: String) : AppEvent
     data class TestAutoSkipSegment(
         val audioKey: String,
         val startMs: Long,

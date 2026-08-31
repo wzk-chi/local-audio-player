@@ -21,9 +21,10 @@ class AutoSkipRepository(
         val start = startMs.coerceAtLeast(0L)
         val end = endMs.coerceAtLeast(0L)
         if (end <= start) return null
+        val contentHash = item.contentHash?.takeIf { it.isNotBlank() } ?: return null
         val segment = AutoSkipSegment(
             id = UUID.randomUUID().toString(),
-            audioKey = item.key,
+            contentHash = contentHash,
             audioUri = item.uri.toString(),
             folderUri = item.folderUri,
             titleSnapshot = item.title,
@@ -57,27 +58,18 @@ class AutoSkipRepository(
         return updated
     }
 
-    fun segmentsFor(audioKey: String): List<AutoSkipSegment> = _state.value
+    fun segmentsFor(contentHash: String): List<AutoSkipSegment> = _state.value
         .asSequence()
-        .filter { it.audioKey == audioKey }
+        .filter { it.contentHash == contentHash }
         .sortedBy { it.startMs }
         .toList()
 
-    fun reconcileFolder(folderUri: String, validAudioKeys: Set<String>) {
+    fun reconcile(validContentHashes: Set<String>, unresolvedAudioUris: Set<String>) {
         updateSegments { segments ->
             segments.filterNot { segment ->
-                segment.folderUri == folderUri && segment.audioKey !in validAudioKeys
+                segment.contentHash !in validContentHashes && segment.audioUri !in unresolvedAudioUris
             }
         }
-    }
-
-    fun removeForFolder(folderUri: String) {
-        updateSegments { segments -> segments.filterNot { it.folderUri == folderUri } }
-    }
-
-    fun removeForAudioKeys(keys: Set<String>) {
-        if (keys.isEmpty()) return
-        updateSegments { segments -> segments.filterNot { it.audioKey in keys } }
     }
 
     private fun updateSegments(transform: (List<AutoSkipSegment>) -> List<AutoSkipSegment>) {

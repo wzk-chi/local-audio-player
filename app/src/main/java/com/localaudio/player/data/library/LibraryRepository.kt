@@ -78,7 +78,6 @@ class LibraryRepository(
 
     fun removeFolder(uriString: String) {
         clearFolderResources(uriString)
-        autoSkipRepository.removeForFolder(uriString)
         directorySkipRepository.removeForFolder(uriString)
         _state.update {
             it.copy(
@@ -89,6 +88,11 @@ class LibraryRepository(
         }
         val folders = _state.value.folders
         val items = _state.value.items
+        autoSkipRepository.reconcile(
+            validContentHashes = items.mapNotNull { it.contentHash }.toSet(),
+            unresolvedAudioUris = items.filter { it.contentHash == null }
+                .mapTo(HashSet()) { it.uri.toString() },
+        )
         persist {
             store.writeFolders(folders)
             store.writeItems(items)
@@ -131,9 +135,10 @@ class LibraryRepository(
                 postCurrent(folder.uri, scanToken) {
                     val items = (_state.value.items.filterNot { it.folderUri == folder.uri } + result)
                         .distinctBy { it.key }
-                    autoSkipRepository.reconcileFolder(
-                        folderUri = folder.uri,
-                        validAudioKeys = result.mapTo(HashSet()) { it.key },
+                    autoSkipRepository.reconcile(
+                        validContentHashes = items.mapNotNull { it.contentHash }.toSet(),
+                        unresolvedAudioUris = items.filter { it.contentHash == null }
+                            .mapTo(HashSet()) { it.uri.toString() },
                     )
                     _state.update {
                         it.copy(
