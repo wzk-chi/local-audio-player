@@ -466,15 +466,17 @@ private fun buildRecycleEntries(state: RecycleBinState): List<RecycleEntry> {
         )
     }
 
-    return buildList {
-        rootNodes.forEach { node ->
-            if (node.folder == null && node.relativePath.isEmpty()) {
-                node.children.forEach { add(buildFolder(it)) }
-                node.items.forEach { add(RecycleEntry.Audio(it)) }
-            } else {
-                add(buildFolder(node))
-            }
+    fun addTopLevel(node: FolderNode, result: MutableList<RecycleEntry>) {
+        if (node.folder != null) {
+            result += buildFolder(node)
+        } else {
+            node.children.forEach { child -> addTopLevel(child, result) }
+            node.items.forEach { item -> result += RecycleEntry.Audio(item) }
         }
+    }
+
+    return buildList {
+        rootNodes.forEach { node -> addTopLevel(node, this) }
         topLevelItems.forEach { add(RecycleEntry.Audio(it)) }
     }.sortedWith(compareByDescending<RecycleEntry> { it.deletedAtMs }.thenBy { it.key })
 }
