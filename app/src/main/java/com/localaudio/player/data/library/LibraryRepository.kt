@@ -10,6 +10,8 @@ import com.localaudio.player.data.model.AudioItem
 import com.localaudio.player.data.model.FolderItem
 import com.localaudio.player.data.model.ScanState
 import com.localaudio.player.data.scan.MediaScanner
+import com.localaudio.player.data.skip.AutoSkipRepository
+import com.localaudio.player.data.skip.DirectorySkipRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +24,8 @@ class LibraryRepository(
     private val context: Context,
     private val scanner: MediaScanner,
     private val store: LibraryStore,
+    private val autoSkipRepository: AutoSkipRepository,
+    private val directorySkipRepository: DirectorySkipRepository,
 ) {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -74,6 +78,8 @@ class LibraryRepository(
 
     fun removeFolder(uriString: String) {
         clearFolderResources(uriString)
+        autoSkipRepository.removeForFolder(uriString)
+        directorySkipRepository.removeForFolder(uriString)
         _state.update {
             it.copy(
                 folders = it.folders.filterNot { folder -> folder.uri == uriString },
@@ -125,6 +131,10 @@ class LibraryRepository(
                 postCurrent(folder.uri, scanToken) {
                     val items = (_state.value.items.filterNot { it.folderUri == folder.uri } + result)
                         .distinctBy { it.key }
+                    autoSkipRepository.reconcileFolder(
+                        folderUri = folder.uri,
+                        validAudioKeys = result.mapTo(HashSet()) { it.key },
+                    )
                     _state.update {
                         it.copy(
                             items = items,

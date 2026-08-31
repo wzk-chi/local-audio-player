@@ -13,6 +13,8 @@ class AppViewModelFactory(
         return AppViewModel(
             libraryRepository = container.libraryRepository,
             settingsRepository = container.settingsRepository,
+            autoSkipRepository = container.autoSkipRepository,
+            directorySkipRepository = container.directorySkipRepository,
             playbackConnection = container.createPlaybackConnection(),
             homeRowsBuilder = HomeRowsBuilder(),
         ) as T

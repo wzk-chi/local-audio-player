@@ -48,6 +48,8 @@ class PlaybackService : Service() {
         val container = (application as LocalAudioApplication).container
         coordinator = PlaybackCoordinator(
             settingsRepository = container.settingsRepository,
+            autoSkipRepository = container.autoSkipRepository,
+            directorySkipRepository = container.directorySkipRepository,
             playbackStore = container.playbackStore,
             queueNavigator = QueueNavigator(),
             sleepTimer = SleepTimer(),

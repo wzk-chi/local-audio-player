@@ -18,21 +18,20 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,7 +46,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
@@ -57,8 +55,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.localaudio.player.R
-import com.localaudio.player.data.settings.REPEAT_ALL
-import com.localaudio.player.data.settings.REPEAT_ONE
 import com.localaudio.player.playback.PlaybackState
 import com.localaudio.player.ui.components.PlayerAction
 import com.localaudio.player.ui.components.PlayerTransportSegment
@@ -81,6 +77,10 @@ fun PlayerScreen(
     onOpenQueue: () -> Unit,
     onOpenTimer: () -> Unit,
     onOpenMode: () -> Unit,
+    onOpenDirectorySkip: () -> Unit,
+    isAutoSkipMarking: Boolean,
+    onStartAutoSkipMark: () -> Unit,
+    onFinishAutoSkipMark: () -> Unit,
 ) {
     val currentItemKey = state.currentItem?.key
     var sliderValue by remember(currentItemKey) { mutableFloatStateOf(state.positionMs.toFloat()) }
@@ -237,13 +237,33 @@ fun PlayerScreen(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            PlayerAction(
-                icon = playModeIcon(state),
-                label = playModeLabel(state),
-                onClick = onOpenMode,
-                shape = actionStartShape,
-                modifier = Modifier.size(width = 76.dp, height = 52.dp),
-            )
+            Box {
+                var modeMenuExpanded by remember { mutableStateOf(false) }
+                PlayerAction(
+                    icon = Icons.Filled.Menu,
+                    label = stringResource(R.string.player_menu),
+                    onClick = { modeMenuExpanded = true },
+                    shape = actionStartShape,
+                    modifier = Modifier.size(width = 76.dp, height = 52.dp),
+                )
+                PlayModeMenu(
+                    expanded = modeMenuExpanded,
+                    hasCurrentItem = state.currentItem != null,
+                    onDismiss = { modeMenuExpanded = false },
+                    onOpenQueue = {
+                        modeMenuExpanded = false
+                        onOpenQueue()
+                    },
+                    onOpenMode = {
+                        modeMenuExpanded = false
+                        onOpenMode()
+                    },
+                    onOpenDirectorySkip = {
+                        modeMenuExpanded = false
+                        onOpenDirectorySkip()
+                    },
+                )
+            }
             PlayerAction(
                 icon = Icons.Filled.Timer,
                 label = timerLabel(state),
@@ -253,13 +273,50 @@ fun PlayerScreen(
                 modifier = Modifier.size(width = 76.dp, height = 52.dp),
             )
             PlayerAction(
-                icon = Icons.AutoMirrored.Filled.QueueMusic,
-                label = stringResource(R.string.player_queue),
-                onClick = onOpenQueue,
+                icon = Icons.Filled.BookmarkAdd,
+                label = stringResource(
+                    if (isAutoSkipMarking) {
+                        R.string.player_auto_skip_finish
+                    } else {
+                        R.string.player_auto_skip_mark
+                    },
+                ),
+                onClick = if (isAutoSkipMarking) onFinishAutoSkipMark else onStartAutoSkipMark,
                 shape = actionEndShape,
+                enabled = state.currentItem != null,
+                active = isAutoSkipMarking,
                 modifier = Modifier.size(width = 76.dp, height = 52.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun PlayModeMenu(
+    expanded: Boolean,
+    hasCurrentItem: Boolean,
+    onDismiss: () -> Unit,
+    onOpenQueue: () -> Unit,
+    onOpenMode: () -> Unit,
+    onOpenDirectorySkip: () -> Unit,
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+    ) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.dialog_queue)) },
+            onClick = onOpenQueue,
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.dialog_play_mode)) },
+            onClick = onOpenMode,
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.player_skip_boundaries)) },
+            onClick = onOpenDirectorySkip,
+            enabled = hasCurrentItem,
+        )
     }
 }
 
@@ -386,21 +443,6 @@ private fun AutoScrollableTrackTitle(
             textAlign = TextAlign.Center,
         )
     }
-}
-
-@Composable
-private fun playModeLabel(state: PlaybackState): String = when {
-    state.shuffleEnabled -> stringResource(R.string.player_mode_shuffle)
-    state.repeatMode == REPEAT_ONE -> stringResource(R.string.player_mode_repeat_one)
-    state.repeatMode == REPEAT_ALL -> stringResource(R.string.player_mode_repeat_all)
-    else -> stringResource(R.string.player_mode_sequential)
-}
-
-private fun playModeIcon(state: PlaybackState): ImageVector = when {
-    state.shuffleEnabled -> Icons.Filled.Shuffle
-    state.repeatMode == REPEAT_ONE -> Icons.Filled.RepeatOne
-    state.repeatMode == REPEAT_ALL -> Icons.Filled.Repeat
-    else -> Icons.AutoMirrored.Filled.PlaylistPlay
 }
 
 @Composable

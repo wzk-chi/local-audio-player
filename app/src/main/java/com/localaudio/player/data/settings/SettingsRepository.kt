@@ -53,6 +53,16 @@ class SettingsRepository(context: Context) {
     fun updateShuffleEnabled(value: Boolean) =
         updateBoolean(KEY_SHUFFLE, value) { it.copy(shuffleEnabled = value) }
 
+    fun updateFadeEnabled(value: Boolean) =
+        updateBoolean(KEY_FADE_ENABLED, value) { it.copy(fadeEnabled = value) }
+
+    fun updateFadeDurationMs(value: Long) {
+        val normalized = (value / FADE_DURATION_STEP_MS)
+            .coerceIn(MIN_FADE_DURATION_MS / FADE_DURATION_STEP_MS, MAX_FADE_DURATION_MS / FADE_DURATION_STEP_MS)
+            .times(FADE_DURATION_STEP_MS)
+        updateLong(KEY_FADE_DURATION, normalized) { it.copy(fadeDurationMs = normalized) }
+    }
+
     fun updateTimerDurationOptions(values: List<Long>) {
         val options = values.filter { it > 0L }.distinct().sorted()
         if (options.isEmpty()) return
@@ -153,6 +163,10 @@ class SettingsRepository(context: Context) {
             seekStepMs = preferences.getLong(KEY_SEEK_STEP, 10_000L).coerceAtLeast(1_000L),
             repeatMode = preferences.getInt(KEY_REPEAT, REPEAT_ALL).coerceIn(REPEAT_OFF, REPEAT_ALL),
             shuffleEnabled = preferences.getBoolean(KEY_SHUFFLE, false),
+            fadeEnabled = preferences.getBoolean(KEY_FADE_ENABLED, true),
+            fadeDurationMs = preferences.getLong(KEY_FADE_DURATION, 1_000L)
+                .coerceIn(MIN_FADE_DURATION_MS, MAX_FADE_DURATION_MS)
+                .let { (it / FADE_DURATION_STEP_MS) * FADE_DURATION_STEP_MS },
             savedHomeLocation = decodeLocation(preferences.getString(KEY_HOME_LOCATION, null)),
         )
     }
@@ -184,6 +198,8 @@ class SettingsRepository(context: Context) {
         const val KEY_SEEK_STEP = "seek_step"
         const val KEY_REPEAT = "repeat"
         const val KEY_SHUFFLE = "shuffle"
+        const val KEY_FADE_ENABLED = "fade_enabled"
+        const val KEY_FADE_DURATION = "fade_duration"
         const val KEY_HOME_LOCATION = "home_location"
         const val KEY_NOTIFICATION_REQUESTED = "notification_requested"
     }

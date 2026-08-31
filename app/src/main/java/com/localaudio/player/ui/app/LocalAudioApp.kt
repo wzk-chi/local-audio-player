@@ -39,6 +39,7 @@ import com.localaudio.player.ui.player.PlaybackBar
 import com.localaudio.player.ui.player.PlaybackProgressSlider
 import com.localaudio.player.ui.player.PlayerScreen
 import com.localaudio.player.ui.settings.LibrarySettingsScreen
+import com.localaudio.player.ui.settings.AutoSkipScreen
 import com.localaudio.player.ui.settings.SettingsScreen
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -55,7 +56,8 @@ fun LocalAudioApp(
     val togglePlayback = {
         dispatchPlayback(if (state.playback.isPlaying) PlaybackCommand.Pause else PlaybackCommand.Play)
     }
-    val isLibrarySettings = state.screen == AppScreen.LIBRARY_SETTINGS
+    val isSecondarySettings = state.screen == AppScreen.LIBRARY_SETTINGS ||
+        state.screen == AppScreen.AUTO_SKIP_SETTINGS
     val pagerState = rememberPagerState(
         initialPage = mainPageFor(state.screen),
         pageCount = { MAIN_PAGE_COUNT },
@@ -63,7 +65,7 @@ fun LocalAudioApp(
     val latestScreen by rememberUpdatedState(state.screen)
 
     LaunchedEffect(state.screen, pagerState) {
-        if (!isLibrarySettings) {
+        if (!isSecondarySettings) {
             val targetPage = mainPageFor(state.screen)
             if (pagerState.currentPage != targetPage) {
                 pagerState.animateScrollToPage(targetPage)
@@ -86,16 +88,26 @@ fun LocalAudioApp(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f)) {
-                if (isLibrarySettings) {
-                    LibrarySettingsScreen(
-                        folders = state.library.folders,
-                        scanStates = state.library.scanStates,
-                        onBack = { onEvent(AppEvent.Back) },
-                        onAddFolder = { onEvent(AppEvent.AddFolder) },
-                        onRescanFolder = { onEvent(AppEvent.RescanFolder(it)) },
-                        onRemoveFolder = { onEvent(AppEvent.RemoveFolder(it)) },
-                        onRescanAll = { onEvent(AppEvent.RescanAll) },
-                    )
+                if (isSecondarySettings) {
+                    when (state.screen) {
+                        AppScreen.LIBRARY_SETTINGS -> LibrarySettingsScreen(
+                            folders = state.library.folders,
+                            scanStates = state.library.scanStates,
+                            onBack = { onEvent(AppEvent.Back) },
+                            onAddFolder = { onEvent(AppEvent.AddFolder) },
+                            onRescanFolder = { onEvent(AppEvent.RescanFolder(it)) },
+                            onRemoveFolder = { onEvent(AppEvent.RemoveFolder(it)) },
+                            onRescanAll = { onEvent(AppEvent.RescanAll) },
+                        )
+                        AppScreen.AUTO_SKIP_SETTINGS -> AutoSkipScreen(
+                            segments = state.autoSkipSegments,
+                            audioItems = state.library.items,
+                            onBack = { onEvent(AppEvent.Back) },
+                            onPlay = { onEvent(AppEvent.PlayAutoSkipAudio(it)) },
+                            onDelete = { onEvent(AppEvent.DeleteAutoSkipSegment(it)) },
+                        )
+                        else -> error("Unexpected secondary screen: ${state.screen}")
+                    }
                 } else {
                     HorizontalPager(
                         state = pagerState,
@@ -138,6 +150,18 @@ fun LocalAudioApp(
                                 onOpenQueue = { onEvent(AppEvent.ShowDialog(AppDialog.Queue)) },
                                 onOpenTimer = { onEvent(AppEvent.ShowDialog(AppDialog.Timer)) },
                                 onOpenMode = { onEvent(AppEvent.ShowDialog(AppDialog.Mode)) },
+                                onOpenDirectorySkip = {
+                                    state.playback.currentItem?.let { item ->
+                                        onEvent(
+                                            AppEvent.ShowDialog(
+                                                AppDialog.DirectorySkip(item.folderUri, item.relativePath),
+                                            ),
+                                        )
+                                    }
+                                },
+                                isAutoSkipMarking = state.activeAutoSkipMark != null,
+                                onStartAutoSkipMark = { onEvent(AppEvent.StartAutoSkipMark) },
+                                onFinishAutoSkipMark = { onEvent(AppEvent.FinishAutoSkipMark) },
                             )
                             AppScreen.SETTINGS -> Column(modifier = Modifier.fillMaxSize()) {
                                 Box(modifier = Modifier.weight(1f)) {
@@ -155,6 +179,12 @@ fun LocalAudioApp(
                                         onSetShowWhenLocked = {
                                             onEvent(AppEvent.UpdateSetting(SettingChange.SetShowWhenLocked(it)))
                                         },
+                                        onSetFadeEnabled = {
+                                            onEvent(AppEvent.UpdateSetting(SettingChange.SetFadeEnabled(it)))
+                                        },
+                                        onSetFadeDuration = {
+                                            onEvent(AppEvent.UpdateSetting(SettingChange.SetFadeDuration(it)))
+                                        },
                                         onSetTimerEnabled = {
                                             onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerEnabled(it)))
                                         },
@@ -163,6 +193,8 @@ fun LocalAudioApp(
                                         },
                                         onSeekStepClick = { onEvent(AppEvent.ShowDialog(AppDialog.SeekStep)) },
                                         onTimerDurationClick = { onEvent(AppEvent.ShowDialog(AppDialog.TimerDuration)) },
+                                        autoSkipCount = state.autoSkipSegments.size,
+                                        onOpenAutoSkip = { onEvent(AppEvent.OpenAutoSkipSettings) },
                                         onOpenLibrary = { onEvent(AppEvent.SelectScreen(AppScreen.LIBRARY_SETTINGS)) },
                                     )
                                 }
@@ -175,14 +207,16 @@ fun LocalAudioApp(
                                     onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
                                 )
                             }
-                            AppScreen.LIBRARY_SETTINGS -> error("Library settings is outside the main pager")
+                            AppScreen.LIBRARY_SETTINGS, AppScreen.AUTO_SKIP_SETTINGS -> {
+                                error("Secondary settings is outside the main pager")
+                            }
                         }
                     }
                 }
             }
 
-            val pagerScreen = if (isLibrarySettings) state.screen else screenForMainPage(pagerState.currentPage)
-            if (!isLibrarySettings) {
+            val pagerScreen = if (isSecondarySettings) state.screen else screenForMainPage(pagerState.currentPage)
+            if (!isSecondarySettings) {
                 BottomNavigation(pagerScreen) { onEvent(AppEvent.SelectScreen(it)) }
             }
         }
@@ -240,7 +274,7 @@ private fun BottomNavigation(screen: AppScreen, onScreenSelected: (AppScreen) ->
 private fun mainPageFor(screen: AppScreen): Int = when (screen) {
     AppScreen.HOME -> 0
     AppScreen.PLAYER -> 1
-    AppScreen.SETTINGS, AppScreen.LIBRARY_SETTINGS -> 2
+    AppScreen.SETTINGS, AppScreen.LIBRARY_SETTINGS, AppScreen.AUTO_SKIP_SETTINGS -> 2
 }
 
 private fun screenForMainPage(page: Int): AppScreen = when (page) {

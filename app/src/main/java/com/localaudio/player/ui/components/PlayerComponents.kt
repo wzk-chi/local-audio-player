@@ -53,6 +53,7 @@ internal fun PlayerAction(
     onClick: () -> Unit,
     shape: Shape,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     active: Boolean = false,
 ) {
     val containerColor = if (active) {
@@ -67,6 +68,7 @@ internal fun PlayerAction(
     }
     Surface(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier,
         shape = shape,
         color = containerColor,

@@ -10,6 +10,10 @@ const val REPEAT_OFF = 0
 const val REPEAT_ONE = 1
 const val REPEAT_ALL = 2
 
+const val MIN_FADE_DURATION_MS = 100L
+const val MAX_FADE_DURATION_MS = 3_000L
+const val FADE_DURATION_STEP_MS = 100L
+
 val DEFAULT_TIMER_DURATIONS_MS = listOf(
     30 * 60_000L,
     60 * 60_000L,
@@ -29,5 +33,7 @@ data class AppSettings(
     val seekStepMs: Long = 10_000L,
     val repeatMode: Int = REPEAT_ALL,
     val shuffleEnabled: Boolean = false,
+    val fadeEnabled: Boolean = true,
+    val fadeDurationMs: Long = 1_000L,
     val savedHomeLocation: FolderLocation? = null,
 )

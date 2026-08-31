@@ -83,6 +83,11 @@ class PlatformPlayer(
         return true
     }
 
+    fun setVolume(volume: Float) {
+        val normalized = volume.coerceIn(0f, 1f)
+        if (isPrepared) mediaPlayer?.setVolume(normalized, normalized)
+    }
+
     fun pause() {
         if (isPrepared && mediaPlayer?.isPlaying == true) mediaPlayer?.pause()
         abandonAudioFocus()

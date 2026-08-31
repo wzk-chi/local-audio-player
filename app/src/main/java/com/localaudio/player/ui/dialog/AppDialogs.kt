@@ -1,10 +1,9 @@
 package com.localaudio.player.ui.dialog
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -50,6 +49,7 @@ import com.localaudio.player.data.settings.REPEAT_ALL
 import com.localaudio.player.data.settings.REPEAT_OFF
 import com.localaudio.player.data.settings.REPEAT_ONE
 import com.localaudio.player.data.settings.ThemeMode
+import com.localaudio.player.data.model.DirectorySkipRule
 import com.localaudio.player.playback.PlaybackCommand
 import com.localaudio.player.playback.PlaybackState
 import com.localaudio.player.ui.components.SettingSwitchRow
@@ -72,16 +72,43 @@ internal fun AppDialogs(
         )
         AppDialog.Mode -> ModeDialog(
             state = state.playback,
-            onSelect = { repeat, shuffle ->
+            onSelect = { repeatMode, shuffleEnabled ->
                 onEvent(
                     AppEvent.Playback(
-                        PlaybackCommand.SetPlayMode(repeat, shuffle),
+                        PlaybackCommand.SetPlayMode(repeatMode, shuffleEnabled),
                     ),
                 )
                 onEvent(AppEvent.DismissDialog)
             },
             onDismiss = { onEvent(AppEvent.DismissDialog) },
         )
+        is AppDialog.DirectorySkip -> {
+            val directoryItems = state.library.items.filter {
+                it.folderUri == current.folderUri && it.relativePath == current.relativePath
+            }
+            val directoryLabel = directoryItems.firstOrNull()?.let { item ->
+                if (current.relativePath.isEmpty()) item.folderName else "${item.folderName}/${current.relativePath}"
+            } ?: current.relativePath.ifEmpty { current.folderUri }
+            DirectorySkipDialog(
+                rule = state.directorySkipRules.firstOrNull {
+                    it.folderUri == current.folderUri && it.relativePath == current.relativePath
+                },
+                directoryLabel = directoryLabel,
+                audioCount = directoryItems.size,
+                onSave = { startSeconds, endSeconds ->
+                    onEvent(
+                        AppEvent.SaveDirectorySkip(
+                            folderUri = current.folderUri,
+                            relativePath = current.relativePath,
+                            startSeconds = startSeconds,
+                            endSeconds = endSeconds,
+                        ),
+                    )
+                    onEvent(AppEvent.DismissDialog)
+                },
+                onDismiss = { onEvent(AppEvent.DismissDialog) },
+            )
+        }
         AppDialog.Timer -> TimerDialog(
             state = state.playback,
             settings = state.settings,
@@ -168,7 +195,7 @@ private fun QueueDialog(
     onSelect: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val listState = rememberLazyListState()
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     LaunchedEffect(state.currentIndex, state.queue.size) {
         if (state.currentIndex in state.queue.indices) {
             listState.scrollToItem(state.currentIndex)
@@ -236,11 +263,81 @@ private fun ModeDialog(
         else -> PlayMode(REPEAT_OFF, false)
     }
     ChoiceDialog(
-        title = stringResource(R.string.dialog_play_order),
+        title = stringResource(R.string.dialog_play_mode),
         options = options,
         selected = selected,
         onSelect = { onSelect(it.repeatMode, it.shuffleEnabled) },
         onDismiss = onDismiss,
+    )
+}
+
+@Composable
+private fun DirectorySkipDialog(
+    rule: DirectorySkipRule?,
+    directoryLabel: String,
+    audioCount: Int,
+    onSave: (Long, Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var startText by remember(rule?.key, rule?.modifiedAtMs) {
+        mutableStateOf(rule?.startSeconds?.toString() ?: "0")
+    }
+    var endText by remember(rule?.key, rule?.modifiedAtMs) {
+        mutableStateOf(rule?.endSeconds?.toString() ?: "0")
+    }
+    val startSeconds = startText.toLongOrNull()?.takeIf { it >= 0L }
+    val endSeconds = endText.toLongOrNull()?.takeIf { it >= 0L }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.dialog_skip_boundaries)) },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = directoryLabel,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(stringResource(R.string.dialog_skip_directory_count, audioCount))
+                OutlinedTextField(
+                    value = startText,
+                    onValueChange = { startText = it.filter(Char::isDigit) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.dialog_skip_start_seconds)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+                OutlinedTextField(
+                    value = endText,
+                    onValueChange = { endText = it.filter(Char::isDigit) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.dialog_skip_end_seconds)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+                Text(
+                    text = stringResource(R.string.dialog_skip_zero_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_cancel)) } },
+        confirmButton = {
+            TextButton(
+                enabled = startSeconds != null && endSeconds != null,
+                onClick = {
+                    if (startSeconds != null && endSeconds != null) {
+                        onSave(startSeconds, endSeconds)
+                    }
+                },
+            ) {
+                Text(stringResource(R.string.dialog_save))
+            }
+        },
     )
 }
 
