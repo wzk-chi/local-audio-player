@@ -37,7 +37,11 @@ class LibraryStore(context: Context, private val database: AudioDatabase) {
                     .put("name", folder.displayName),
             )
         }
-        preferences.edit().putString(KEY_FOLDERS, json.toString()).apply()
+        // Folder roots must be durable before a scan can outlive the process.
+        // This method is always called from the repository's background writer.
+        check(preferences.edit().putString(KEY_FOLDERS, json.toString()).commit()) {
+            "无法保存音乐库文件夹"
+        }
     }
 
     fun readItems(): List<AudioItem> = runCatching {
@@ -81,6 +85,8 @@ class LibraryStore(context: Context, private val database: AudioDatabase) {
             folderUri = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_FOLDER_URI)),
             folderName = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_FOLDER_NAME)),
             relativePath = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_RELATIVE_PATH)),
+            sizeBytes = getLong(getColumnIndexOrThrow(AudioDatabase.COLUMN_SIZE_BYTES)),
+            lastModifiedMs = getLong(getColumnIndexOrThrow(AudioDatabase.COLUMN_LAST_MODIFIED_MS)),
             contentHash = hash.takeIf {
                 !it.isNullOrBlank() && hashAlgorithm == CONTENT_HASH_ALGORITHM
             },
@@ -95,6 +101,8 @@ class LibraryStore(context: Context, private val database: AudioDatabase) {
         put(AudioDatabase.COLUMN_FOLDER_URI, folderUri)
         put(AudioDatabase.COLUMN_FOLDER_NAME, folderName)
         put(AudioDatabase.COLUMN_RELATIVE_PATH, relativePath)
+        put(AudioDatabase.COLUMN_SIZE_BYTES, sizeBytes)
+        put(AudioDatabase.COLUMN_LAST_MODIFIED_MS, lastModifiedMs)
         contentHash?.let {
             put(AudioDatabase.COLUMN_CONTENT_HASH_ALGORITHM, CONTENT_HASH_ALGORITHM)
             put(AudioDatabase.COLUMN_CONTENT_HASH, it)
@@ -110,6 +118,8 @@ class LibraryStore(context: Context, private val database: AudioDatabase) {
             AudioDatabase.COLUMN_FOLDER_URI,
             AudioDatabase.COLUMN_FOLDER_NAME,
             AudioDatabase.COLUMN_RELATIVE_PATH,
+            AudioDatabase.COLUMN_SIZE_BYTES,
+            AudioDatabase.COLUMN_LAST_MODIFIED_MS,
             AudioDatabase.COLUMN_CONTENT_HASH_ALGORITHM,
             AudioDatabase.COLUMN_CONTENT_HASH,
         )

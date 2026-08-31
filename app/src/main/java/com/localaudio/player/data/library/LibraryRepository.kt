@@ -12,6 +12,7 @@ import com.localaudio.player.data.model.FolderLocation
 import com.localaudio.player.data.model.RecycleFolder
 import com.localaudio.player.data.model.ScanState
 import com.localaudio.player.data.scan.MediaScanner
+import com.localaudio.player.data.scan.ScannedDirectory
 import com.localaudio.player.data.skip.AutoSkipRepository
 import com.localaudio.player.data.skip.DirectorySkipRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +32,7 @@ class LibraryRepository(
     private val recycleBinRepository: RecycleBinRepository,
 ) {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val persistenceExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val fileOperationExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val jobs = HashMap<String, Future<*>>()
@@ -69,13 +71,26 @@ class LibraryRepository(
             )
         }.onFailure { return }
         if (_state.value.folders.any { it.uri == uri.toString() }) return
-        executor.execute {
-            val folder = FolderItem(uri.toString(), queryDisplayName(uri) ?: fallbackFolderName(uri))
-            post {
-                if (_state.value.folders.any { it.uri == folder.uri }) return@post
-                _state.update { it.copy(folders = it.folders + folder) }
-                persist { store.writeFolders(_state.value.folders) }
-                startScan(folder)
+        val provisionalFolder = FolderItem(uri.toString(), fallbackFolderName(uri))
+        _state.update { it.copy(folders = it.folders + provisionalFolder) }
+        val savedFolders = _state.value.folders
+        persistenceExecutor.execute {
+            if (runCatching { store.writeFolders(savedFolders) }.isSuccess) {
+                val displayName = queryDisplayName(uri) ?: provisionalFolder.displayName
+                post {
+                    val folder = _state.value.folders.firstOrNull { it.uri == provisionalFolder.uri }
+                        ?: return@post
+                    val updated = folder.copy(displayName = displayName)
+                    if (updated != folder) {
+                        _state.update { state ->
+                            state.copy(folders = state.folders.map { current ->
+                                if (current.uri == updated.uri) updated else current
+                            })
+                        }
+                        persist { store.writeFolders(_state.value.folders) }
+                    }
+                    startScan(updated)
+                }
             }
         }
     }
@@ -384,6 +399,10 @@ class LibraryRepository(
         val publishedKeys = HashSet<String>(_state.value.items.size + 32).apply {
             _state.value.items.forEach { add(it.key) }
         }
+        val knownItems = _state.value.items
+            .asSequence()
+            .filter { it.folderUri == folder.uri }
+            .associateBy { it.key }
         _state.update { it.copy(scanStates = it.scanStates + (folder.uri to ScanState.Scanning(0, 0))) }
         jobs[folder.uri] = executor.submit {
             try {
@@ -398,26 +417,31 @@ class LibraryRepository(
                         }
                     },
                     onItems = { batch ->
-                        postCurrent(folder.uri, scanToken) {
-                            if (!rebindRenamedPaths) {
-                                val fresh = batch.filter { !recycleBinRepository.isUriBlocked(it.uri.toString()) }
-                                    .filter { publishedKeys.add(it.key) }
-                                if (fresh.isNotEmpty()) _state.update { it.copy(items = it.items + fresh) }
+                        if (!rebindRenamedPaths) {
+                            val fresh = batch.filterNot { recycleBinRepository.isUriBlocked(it.uri.toString()) }
+                                .filter { publishedKeys.add(it.key) }
+                            if (fresh.isNotEmpty()) {
+                                postCurrent(folder.uri, scanToken) {
+                                    _state.update { it.copy(items = it.items + fresh) }
+                                }
                             }
                         }
                     },
-                    isUriBlocked = recycleBinRepository::isUriBlocked,
+                    knownItems = knownItems,
+                    onDirectories = { directories ->
+                        recycleBinRepository.updateScannedDirectories(directories)
+                    },
                     isDirectoryBlocked = recycleBinRepository::isDirectoryBlocked,
                 )
+                autoSkipRepository.updateSnapshots(result)
+                val visibleResult = recycleBinRepository.filterScannedItems(
+                    result,
+                    rebindRenamedPaths = rebindRenamedPaths,
+                )
+                val items = (_state.value.items.filterNot { it.folderUri == folder.uri } + visibleResult)
+                    .distinctBy { it.key }
+                reconcileAutoSkip(items)
                 postCurrent(folder.uri, scanToken) {
-                    autoSkipRepository.updateSnapshots(result)
-                    val visibleResult = recycleBinRepository.filterScannedItems(
-                        result,
-                        rebindRenamedPaths = rebindRenamedPaths,
-                    )
-                    val items = (_state.value.items.filterNot { it.folderUri == folder.uri } + visibleResult)
-                        .distinctBy { it.key }
-                    reconcileAutoSkip(items)
                     _state.update {
                         it.copy(
                             items = items,
@@ -481,9 +505,10 @@ class LibraryRepository(
     }
 
     private fun persistLibrary() {
+        val snapshot = _state.value
         persist {
-            store.writeFolders(_state.value.folders)
-            store.writeItems(_state.value.items)
+            store.writeFolders(snapshot.folders)
+            store.writeItems(snapshot.items)
         }
     }
 
@@ -560,7 +585,7 @@ class LibraryRepository(
     private fun post(block: () -> Unit) = mainHandler.post(block)
 
     private fun persist(block: () -> Unit) {
-        executor.execute(block)
+        persistenceExecutor.execute(block)
     }
 
     private fun postCurrent(folderUri: String, scanToken: Long, block: () -> Unit) {

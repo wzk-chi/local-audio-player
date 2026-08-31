@@ -17,6 +17,10 @@ data class AudioItem(
     val folderName: String,
     /** 相对来源根文件夹的目录路径（不含文件名），如 "流行/华语"；根目录下为空串。 */
     val relativePath: String = "",
+    /** 文件大小，SAF 不提供时为 -1；用于判断扫描缓存是否仍然有效。 */
+    val sizeBytes: Long = -1L,
+    /** 文件最后修改时间，SAF 不提供时为 -1；用于判断扫描缓存是否仍然有效。 */
+    val lastModifiedMs: Long = -1L,
     /** 内容哈希：后台扫描完成后计算的 xxHash64，未计算成功时为空。 */
     val contentHash: String? = null,
 ) {

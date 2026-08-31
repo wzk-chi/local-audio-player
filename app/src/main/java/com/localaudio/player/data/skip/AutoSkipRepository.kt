@@ -18,6 +18,7 @@ class AutoSkipRepository(
 
     val state: StateFlow<List<AutoSkipSegment>> = _state.asStateFlow()
 
+    @Synchronized
     fun add(item: AudioItem, startMs: Long, endMs: Long): AutoSkipSegment? {
         val start = startMs.coerceAtLeast(0L)
         val end = endMs.coerceAtLeast(0L)
@@ -39,10 +40,12 @@ class AutoSkipRepository(
         return segment
     }
 
+    @Synchronized
     fun delete(id: String) {
         updateSegments { segments -> segments.filterNot { it.id == id } }
     }
 
+    @Synchronized
     fun update(id: String, startMs: Long, endMs: Long): AutoSkipSegment? {
         val start = startMs.coerceAtLeast(0L)
         val end = endMs.coerceAtLeast(0L)
@@ -59,12 +62,14 @@ class AutoSkipRepository(
         return updated
     }
 
+    @Synchronized
     fun segmentsFor(contentHash: String): List<AutoSkipSegment> = _state.value
         .asSequence()
         .filter { it.contentHash == contentHash }
         .sortedBy { it.startMs }
         .toList()
 
+    @Synchronized
     fun reconcile(validContentHashes: Set<String>, unresolvedAudioUris: Set<String>) {
         updateSegments { segments ->
             segments.filterNot { segment ->
@@ -74,6 +79,7 @@ class AutoSkipRepository(
     }
 
     /** Refreshes the display/playback snapshot after a completed media scan. */
+    @Synchronized
     fun updateSnapshots(items: List<AudioItem>) {
         val byUri = items.associateBy { normalizeUri(it.uri.toString()) }
         val byHash = items.filter { !it.contentHash.isNullOrBlank() }
@@ -87,6 +93,7 @@ class AutoSkipRepository(
         }
     }
 
+    @Synchronized
     fun updateAudioSnapshot(previousUri: String, item: AudioItem) {
         updateSegments { segments ->
             segments.map { segment ->
@@ -101,6 +108,7 @@ class AutoSkipRepository(
         }
     }
 
+    @Synchronized
     fun updateRootFolderSnapshot(folderUri: String, folderName: String) {
         updateSegments { segments ->
             segments.map { segment ->
@@ -111,6 +119,7 @@ class AutoSkipRepository(
         }
     }
 
+    @Synchronized
     fun updatePathSnapshot(folderUri: String, oldPath: String, newPath: String) {
         updateSegments { segments ->
             segments.map { segment ->
