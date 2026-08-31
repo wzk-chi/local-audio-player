@@ -65,7 +65,9 @@
     <string name="settings_recycle_bin_count">%1$d 个项目</string>
     <string name="recycle_bin_title">回收站</string>
     <string name="recycle_bin_back">返回设置</string>
+    <string name="recycle_bin_folder_back">返回回收站</string>
     <string name="recycle_bin_empty">回收站为空</string>
+    <string name="recycle_bin_folder_empty">此文件夹中没有音频</string>
     <string name="recycle_bin_select_all">全选</string>
     <string name="recycle_bin_deselect_all">取消全选</string>
     <string name="recycle_bin_restore">还原</string>
