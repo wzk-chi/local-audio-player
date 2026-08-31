@@ -108,8 +108,8 @@
     <string name="auto_skip_delete_title">删除自动跳过标记？</string>
     <string name="auto_skip_delete_message">删除“%1$s”的标记 %2$s–%3$s？</string>
     <string name="auto_skip_editor_title">自动跳过标记</string>
-    <string name="auto_skip_start_time">开始时间</string>
-    <string name="auto_skip_end_time">结束时间</string>
+    <string name="auto_skip_start_time">开始</string>
+    <string name="auto_skip_end_time">结束</string>
     <string name="auto_skip_adjust_decrease">减少时间</string>
     <string name="auto_skip_adjust_increase">增加时间</string>
     <string name="auto_skip_test">测试</string>

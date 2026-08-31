@@ -481,7 +481,7 @@ private const val AUTO_SKIP_ADJUST_STEP_MS = 100L
 
 private fun adjustAutoSkipTime(valueMs: Long, deltaMs: Long, maxDurationMs: Long): Long {
     val adjusted = if (deltaMs < 0L) {
-        valueMs.coerceAtLeast(-deltaMs)
+        (valueMs + deltaMs).coerceAtLeast(0L)
     } else if (valueMs > Long.MAX_VALUE - deltaMs) {
         Long.MAX_VALUE
     } else {

@@ -81,6 +81,7 @@ fun PlayerScreen(
     isAutoSkipMarking: Boolean,
     onStartAutoSkipMark: () -> Unit,
     onFinishAutoSkipMark: () -> Unit,
+    onCancelAutoSkipMark: () -> Unit,
 ) {
     val currentItemKey = state.currentItem?.key
     var sliderValue by remember(currentItemKey) { mutableFloatStateOf(state.positionMs.toFloat()) }
@@ -282,6 +283,7 @@ fun PlayerScreen(
                     },
                 ),
                 onClick = if (isAutoSkipMarking) onFinishAutoSkipMark else onStartAutoSkipMark,
+                onLongClick = if (isAutoSkipMarking) onCancelAutoSkipMark else null,
                 shape = actionEndShape,
                 enabled = state.currentItem != null,
                 active = isAutoSkipMarking,

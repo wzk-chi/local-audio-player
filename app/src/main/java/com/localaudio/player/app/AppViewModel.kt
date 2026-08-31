@@ -119,6 +119,7 @@ class AppViewModel(
             is AppEvent.PlayAudio -> playAudio(event.item)
             AppEvent.StartAutoSkipMark -> startAutoSkipMark()
             AppEvent.FinishAutoSkipMark -> finishAutoSkipMark()
+            AppEvent.CancelAutoSkipMark -> activeAutoSkipMark.value = null
             AppEvent.OpenAutoSkipSettings -> navigateTo(AppScreen.AUTO_SKIP_SETTINGS)
             is AppEvent.DeleteAutoSkipSegment -> autoSkipRepository.delete(event.id)
             is AppEvent.EditAutoSkipSegment -> editAutoSkipSegment(event.id)

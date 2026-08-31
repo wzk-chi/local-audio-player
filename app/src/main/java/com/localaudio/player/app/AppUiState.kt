@@ -75,6 +75,7 @@ sealed interface AppEvent {
     data class PlayAudio(val item: AudioItem) : AppEvent
     data object StartAutoSkipMark : AppEvent
     data object FinishAutoSkipMark : AppEvent
+    data object CancelAutoSkipMark : AppEvent
     data object OpenAutoSkipSettings : AppEvent
     data class DeleteAutoSkipSegment(val id: String) : AppEvent
     data class EditAutoSkipSegment(val id: String) : AppEvent

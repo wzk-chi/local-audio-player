@@ -163,6 +163,7 @@ fun LocalAudioApp(
                                 isAutoSkipMarking = state.activeAutoSkipMark != null,
                                 onStartAutoSkipMark = { onEvent(AppEvent.StartAutoSkipMark) },
                                 onFinishAutoSkipMark = { onEvent(AppEvent.FinishAutoSkipMark) },
+                                onCancelAutoSkipMark = { onEvent(AppEvent.CancelAutoSkipMark) },
                             )
                             AppScreen.SETTINGS -> Column(modifier = Modifier.fillMaxSize()) {
                                 Box(modifier = Modifier.weight(1f)) {

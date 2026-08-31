@@ -4,6 +4,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -51,6 +52,7 @@ internal fun PlayerAction(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     shape: Shape,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
@@ -67,15 +69,19 @@ internal fun PlayerAction(
         MaterialTheme.colorScheme.onSurfaceVariant
     }
     Surface(
-        onClick = onClick,
-        enabled = enabled,
         modifier = modifier,
         shape = shape,
         color = containerColor,
         contentColor = contentColor,
     ) {
         Box(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .combinedClickable(
+                    enabled = enabled,
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
