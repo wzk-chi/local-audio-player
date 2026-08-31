@@ -4,11 +4,14 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.DocumentsContract
+import com.localaudio.player.data.hash.AudioHashCalculator
 import com.localaudio.player.data.model.AudioItem
 import java.util.Locale
 
 /** SAF scanner using one query per directory and one reusable metadata retriever. */
 class MediaScanner(private val context: Context) {
+    private val hashCalculator = AudioHashCalculator(context)
+
     private companion object {
         const val MAX_DEPTH = 20
         val PROJECTION = arrayOf(
@@ -81,7 +84,10 @@ class MediaScanner(private val context: Context) {
             if (pending.isNotEmpty()) onItems(pending.toList())
             val result = found.distinctBy { it.key }.map { item ->
                 checkInterrupted()
-                item.copy(durationMs = readDuration(retriever, item.uri))
+                item.copy(
+                    durationMs = readDuration(retriever, item.uri),
+                    contentHash = hashCalculator.calculate(item.uri),
+                )
             }
             onProgress(scanned, result.size)
             return result

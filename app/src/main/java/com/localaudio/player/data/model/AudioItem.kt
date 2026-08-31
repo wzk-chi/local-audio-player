@@ -17,6 +17,8 @@ data class AudioItem(
     val folderName: String,
     /** 相对来源根文件夹的目录路径（不含文件名），如 "流行/华语"；根目录下为空串。 */
     val relativePath: String = "",
+    /** 内容哈希：后台扫描完成后计算的 xxHash64，未计算成功时为空。 */
+    val contentHash: String? = null,
 ) {
     /** 去重用的稳定键。 */
     val key: String get() = uri.normalizeScheme().toString()

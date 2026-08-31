@@ -6,6 +6,7 @@ material3 = "1.4.0-alpha18"
 activityCompose = "1.10.1"
 lifecycle = "2.9.1"
 coroutines = "1.10.2"
+lz4 = "1.8.0"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
@@ -15,6 +16,7 @@ androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtim
 androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 androidx-lifecycle-viewmodel-ktx = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+lz4-java = { module = "org.lz4:lz4-java", version.ref = "lz4" }
 androidx-material3 = { module = "androidx.compose.material3:material3", version.ref = "material3" }
 androidx-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 

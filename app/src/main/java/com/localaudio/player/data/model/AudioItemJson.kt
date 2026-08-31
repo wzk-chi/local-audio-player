@@ -1,6 +1,7 @@
 package com.localaudio.player.data.model
 
 import android.net.Uri
+import com.localaudio.player.data.hash.CONTENT_HASH_ALGORITHM
 import org.json.JSONObject
 
 internal object AudioItemJson {
@@ -12,6 +13,12 @@ internal object AudioItemJson {
         .put("folderUri", item.folderUri)
         .put("folderName", item.folderName)
         .put("relativePath", item.relativePath)
+        .apply {
+            item.contentHash?.let {
+                put("contentHashAlgorithm", CONTENT_HASH_ALGORITHM)
+                put("contentHash", it)
+            }
+        }
 
     fun decode(json: JSONObject): AudioItem = AudioItem(
         uri = Uri.parse(json.getString("uri")),
@@ -21,5 +28,7 @@ internal object AudioItemJson {
         folderUri = json.getString("folderUri"),
         folderName = json.getString("folderName"),
         relativePath = json.optString("relativePath"),
+        contentHash = json.optString("contentHash")
+            .takeIf { it.isNotBlank() && json.optString("contentHashAlgorithm") == CONTENT_HASH_ALGORITHM },
     )
 }
