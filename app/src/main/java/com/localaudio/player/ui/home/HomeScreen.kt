@@ -23,6 +23,8 @@ import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +36,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Schedule
@@ -84,7 +88,8 @@ fun HomeScreen(
     onLocateCurrent: () -> Unit,
     onDirectoryClick: (FolderLocation) -> Unit,
     onAudioClick: (AudioItem) -> Unit,
-    onLongClick: (HomeRow) -> Unit,
+    onRename: (HomeRow) -> Unit,
+    onDelete: (HomeRow) -> Unit,
     onAddFolder: () -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -142,8 +147,20 @@ fun HomeScreen(
                 ) {
                     items(rows, key = { rowKey(it) }) { row ->
                         when (row) {
-                            is HomeRow.Directory -> DirectoryRow(row.location, onDirectoryClick, { onLongClick(row) })
-                            is HomeRow.Audio -> AudioRow(row.item, playingKey, onAudioClick, { onLongClick(row) })
+                            is HomeRow.Directory -> HomeRowWithActions(
+                                row = row,
+                                onRename = onRename,
+                                onDelete = onDelete,
+                            ) { onLongClick ->
+                                DirectoryRow(row.location, onDirectoryClick, onLongClick)
+                            }
+                            is HomeRow.Audio -> HomeRowWithActions(
+                                row = row,
+                                onRename = onRename,
+                                onDelete = onDelete,
+                            ) { onLongClick ->
+                                AudioRow(row.item, playingKey, onAudioClick, onLongClick)
+                            }
                         }
                     }
                 }
@@ -156,6 +173,49 @@ fun HomeScreen(
                         .fillMaxHeight(),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun HomeRowWithActions(
+    row: HomeRow,
+    onRename: (HomeRow) -> Unit,
+    onDelete: (HomeRow) -> Unit,
+    content: @Composable (onLongClick: () -> Unit) -> Unit,
+) {
+    var menuExpanded by remember(rowKey(row)) { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        content { menuExpanded = true }
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text("重命名") },
+                onClick = {
+                    menuExpanded = false
+                    onRename(row)
+                },
+                leadingIcon = {
+                    Icon(Icons.Filled.Edit, contentDescription = null)
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("删除", color = MaterialTheme.colorScheme.error) },
+                onClick = {
+                    menuExpanded = false
+                    onDelete(row)
+                },
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                },
+            )
         }
     }
 }

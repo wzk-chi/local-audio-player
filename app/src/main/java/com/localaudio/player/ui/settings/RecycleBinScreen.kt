@@ -13,6 +13,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.MusicNote
@@ -55,14 +57,22 @@ fun RecycleBinScreen(
     onClean: (Set<String>) -> Unit,
 ) {
     val entries = remember(state) {
-        buildList {
-            state.folders.forEach { add(RecycleEntry.Folder(it)) }
-            state.items.forEach { add(RecycleEntry.Audio(it)) }
-        }.sortedWith(compareByDescending<RecycleEntry> { it.deletedAtMs }.thenBy { it.key })
+        buildRecycleEntries(state)
     }
     var selected by remember(entries) { mutableStateOf(emptySet<String>()) }
     var showCleanConfirmation by remember { mutableStateOf(false) }
-    val allSelected = entries.isNotEmpty() && selected.size == entries.size
+    val selectableKeys = remember(entries) {
+        entries.flatMapTo(HashSet()) { entry ->
+            when (entry) {
+                is RecycleEntry.Folder -> buildSet {
+                    add(entry.key)
+                    entry.children.forEach { add("item:${it.key}") }
+                }
+                is RecycleEntry.Audio -> setOf(entry.key)
+            }
+        }
+    }
+    val allSelected = selectableKeys.isNotEmpty() && selected.containsAll(selectableKeys)
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -79,7 +89,7 @@ fun RecycleBinScreen(
                 if (entries.isNotEmpty()) {
                     TextButton(
                         onClick = {
-                            selected = if (allSelected) emptySet() else entries.mapTo(HashSet()) { it.key }
+                            selected = if (allSelected) emptySet() else selectableKeys
                         },
                     ) {
                         Text(stringResource(if (allSelected) R.string.recycle_bin_deselect_all else R.string.recycle_bin_select_all))
@@ -109,13 +119,26 @@ fun RecycleBinScreen(
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                     ) {
                         entries.forEach { entry ->
-                            RecycleRow(
-                                entry = entry,
-                                selected = entry.key in selected,
-                                onSelectedChange = { checked ->
-                                    selected = if (checked) selected + entry.key else selected - entry.key
-                                },
-                            )
+                            when (entry) {
+                                is RecycleEntry.Folder -> RecycleFolderGroup(
+                                    entry = entry,
+                                    selected = entry.key in selected,
+                                    onSelectedChange = { checked ->
+                                        selected = if (checked) selected + entry.key else selected - entry.key
+                                    },
+                                    selectedChildren = selected,
+                                    onChildSelectedChange = { key, checked ->
+                                        selected = if (checked) selected + key else selected - key
+                                    },
+                                )
+                                is RecycleEntry.Audio -> RecycleRow(
+                                    entry = entry,
+                                    selected = entry.key in selected,
+                                    onSelectedChange = { checked ->
+                                        selected = if (checked) selected + entry.key else selected - entry.key
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -220,6 +243,113 @@ private fun RecycleRow(
     )
 }
 
+@Composable
+private fun RecycleFolderGroup(
+    entry: RecycleEntry.Folder,
+    selected: Boolean,
+    onSelectedChange: (Boolean) -> Unit,
+    selectedChildren: Set<String>,
+    onChildSelectedChange: (String, Boolean) -> Unit,
+) {
+    var expanded by remember(entry.key) { mutableStateOf(true) }
+
+    ListItem(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelectedChange(!selected) },
+        leadingContent = {
+            Checkbox(checked = selected, onCheckedChange = onSelectedChange)
+        },
+        headlineContent = {
+            Text(
+                text = entry.title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        supportingContent = {
+            Text(
+                text = if (entry.children.isEmpty()) {
+                    entry.description
+                } else {
+                    "${entry.children.size} 个音频 · ${entry.description}"
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        },
+        trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (entry.children.isNotEmpty()) {
+                    IconButton(onClick = { expanded = !expanded }) {
+                        Icon(
+                            imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                            contentDescription = if (expanded) "收起音频" else "展开音频",
+                        )
+                    }
+                }
+            }
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
+
+    if (expanded) {
+        entry.children.forEach { item ->
+            val key = "item:${item.key}"
+            RecycleChildAudioRow(
+                item = item,
+                selected = key in selectedChildren,
+                onSelectedChange = { checked -> onChildSelectedChange(key, checked) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecycleChildAudioRow(
+    item: RecycleItem,
+    selected: Boolean,
+    onSelectedChange: (Boolean) -> Unit,
+) {
+    ListItem(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 56.dp),
+        leadingContent = {
+            Checkbox(checked = selected, onCheckedChange = onSelectedChange)
+        },
+        headlineContent = {
+            Text(
+                text = item.title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        supportingContent = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = item.relativePath.ifBlank { item.folderName },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (item.durationMs > 0L) {
+                    Text(
+                        text = formatTime(item.durationMs),
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
+}
+
 private sealed interface RecycleEntry {
     val key: String
     val title: String
@@ -237,7 +367,10 @@ private sealed interface RecycleEntry {
         override val icon = Icons.Filled.MusicNote
     }
 
-    data class Folder(private val folder: RecycleFolder) : RecycleEntry {
+    data class Folder(
+        private val folder: RecycleFolder,
+        val children: List<RecycleItem>,
+    ) : RecycleEntry {
         override val key: String = "folder:${folder.key}"
         override val title: String = folder.title
         override val description: String = folder.relativePath.ifBlank { folder.rootFolderUri }
@@ -246,6 +379,48 @@ private sealed interface RecycleEntry {
         override val icon = Icons.Filled.Folder
     }
 }
+
+private fun buildRecycleEntries(state: RecycleBinState): List<RecycleEntry> {
+    val folders = state.folders.sortedWith(
+        compareByDescending<RecycleFolder> { it.deletedAtMs }.thenBy { it.key },
+    )
+    val childrenByFolder = folders.associate { it.key to mutableListOf<RecycleItem>() }
+    val topLevelItems = mutableListOf<RecycleItem>()
+
+    state.items.forEach { item ->
+        val owner = folders
+            .asSequence()
+            .filter { folder ->
+                folder.rootFolderUri == item.folderUri &&
+                    isInPath(item.relativePath, folder.relativePath)
+            }
+            .sortedWith(compareByDescending<RecycleFolder> { it.relativePath.length }.thenBy { it.key })
+            .firstOrNull()
+        if (owner == null) {
+            topLevelItems += item
+        } else {
+            childrenByFolder.getValue(owner.key) += item
+        }
+    }
+
+    return buildList {
+        folders.forEach { folder ->
+            add(
+                RecycleEntry.Folder(
+                    folder = folder,
+                    children = childrenByFolder.getValue(folder.key)
+                        .sortedWith(compareByDescending<RecycleItem> { it.deletedAtMs }.thenBy { it.key }),
+                ),
+            )
+        }
+        topLevelItems
+            .sortedWith(compareByDescending<RecycleItem> { it.deletedAtMs }.thenBy { it.key })
+            .forEach { add(RecycleEntry.Audio(it)) }
+    }.sortedWith(compareByDescending<RecycleEntry> { it.deletedAtMs }.thenBy { it.key })
+}
+
+private fun isInPath(path: String, parent: String): Boolean =
+    path == parent || (parent.isNotEmpty() && path.startsWith("$parent/"))
 
 private fun displayPath(folderName: String, relativePath: String): String =
     if (relativePath.isBlank()) folderName else "$folderName/$relativePath"

@@ -23,7 +23,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -88,12 +87,6 @@ internal fun AppDialogs(
                 )
                 onEvent(AppEvent.DismissDialog)
             },
-            onDismiss = { onEvent(AppEvent.DismissDialog) },
-        )
-        is AppDialog.HomeActions -> HomeActionsSheet(
-            target = current.target,
-            onRename = { onEvent(AppEvent.ShowDialog(AppDialog.Rename(current.target))) },
-            onDelete = { onEvent(AppEvent.ShowDialog(AppDialog.Delete(current.target))) },
             onDismiss = { onEvent(AppEvent.DismissDialog) },
         )
         is AppDialog.Rename -> RenameHomeDialog(
@@ -250,39 +243,6 @@ internal fun AppDialogs(
             onDismiss = { onEvent(AppEvent.DismissDialog) },
         )
         null -> Unit
-    }
-}
-
-@Composable
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-private fun HomeActionsSheet(
-    target: HomeActionTarget,
-    onRename: () -> Unit,
-    onDelete: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(modifier = Modifier.padding(bottom = 16.dp)) {
-            Text(
-                text = target.displayName(),
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            ListItem(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onRename),
-                headlineContent = { Text("重命名") },
-            )
-            ListItem(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onDelete),
-                headlineContent = { Text("删除", color = MaterialTheme.colorScheme.error) },
-            )
-        }
     }
 }
 

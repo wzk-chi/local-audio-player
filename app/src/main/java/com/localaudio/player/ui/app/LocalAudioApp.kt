@@ -137,13 +137,17 @@ fun LocalAudioApp(
                                     onLocateCurrent = { onEvent(AppEvent.LocateCurrent) },
                                     onDirectoryClick = { onEvent(AppEvent.OpenDirectory(it)) },
                                     onAudioClick = { onEvent(AppEvent.PlayAudio(it)) },
-                                    onLongClick = { row ->
+                                    onRename = { row ->
                                         onEvent(
-                                            AppEvent.ShowHomeActions(
-                                                when (row) {
-                                                    is HomeRow.Audio -> HomeActionTarget.Audio(row.item)
-                                                    is HomeRow.Directory -> HomeActionTarget.Directory(row.location)
-                                                },
+                                            AppEvent.ShowDialog(
+                                                AppDialog.Rename(row.toHomeActionTarget()),
+                                            ),
+                                        )
+                                    },
+                                    onDelete = { row ->
+                                        onEvent(
+                                            AppEvent.ShowDialog(
+                                                AppDialog.Delete(row.toHomeActionTarget()),
                                             ),
                                         )
                                     },
@@ -306,4 +310,9 @@ private fun screenForMainPage(page: Int): AppScreen = when (page) {
     0 -> AppScreen.HOME
     1 -> AppScreen.PLAYER
     else -> AppScreen.SETTINGS
+}
+
+private fun HomeRow.toHomeActionTarget(): HomeActionTarget = when (this) {
+    is HomeRow.Audio -> HomeActionTarget.Audio(item)
+    is HomeRow.Directory -> HomeActionTarget.Directory(location)
 }

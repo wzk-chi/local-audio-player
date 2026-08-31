@@ -23,7 +23,6 @@ sealed interface HomeActionTarget {
 sealed interface AppDialog {
     data object Queue : AppDialog
     data object Mode : AppDialog
-    data class HomeActions(val target: HomeActionTarget) : AppDialog
     data class Rename(val target: HomeActionTarget) : AppDialog
     data class Delete(val target: HomeActionTarget, val deleteSource: Boolean = false) : AppDialog
     data class DirectorySkip(val folderUri: String, val relativePath: String) : AppDialog
@@ -83,7 +82,6 @@ sealed interface AppEvent {
     data object LocateCurrent : AppEvent
     data class OpenDirectory(val location: FolderLocation) : AppEvent
     data class PlayAudio(val item: AudioItem) : AppEvent
-    data class ShowHomeActions(val target: HomeActionTarget) : AppEvent
     data class RenameHomeItem(val target: HomeActionTarget, val name: String) : AppEvent
     data class DeleteHomeItem(val target: HomeActionTarget, val deleteSource: Boolean) : AppEvent
     data class RestoreRecycle(val keys: Set<String>) : AppEvent

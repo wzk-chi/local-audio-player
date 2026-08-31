@@ -128,7 +128,6 @@ class AppViewModel(
             AppEvent.LocateCurrent -> locateCurrent()
             is AppEvent.OpenDirectory -> updateHomeLocation(event.location)
             is AppEvent.PlayAudio -> playAudio(event.item)
-            is AppEvent.ShowHomeActions -> navigation.update { it.copy(dialog = AppDialog.HomeActions(event.target)) }
             is AppEvent.RenameHomeItem -> renameHomeItem(event.target, event.name)
             is AppEvent.DeleteHomeItem -> deleteHomeItem(event.target, event.deleteSource)
             is AppEvent.RestoreRecycle -> restoreRecycle(event.keys)
