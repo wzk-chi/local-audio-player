@@ -84,6 +84,7 @@
     <string name="dialog_seek_step">快进 / 快退跨度</string>
     <string name="dialog_seconds">秒数</string>
     <string name="dialog_save">保存</string>
+    <string name="dialog_confirm">确定</string>
     <string name="dialog_timer_length">定时长度</string>
     <string name="dialog_delete">删除</string>
     <string name="dialog_add_custom_duration">添加自定义时长</string>
@@ -102,8 +103,20 @@
     <string name="auto_skip_title">自动跳过管理</string>
     <string name="auto_skip_back">返回设置</string>
     <string name="auto_skip_empty">还没有自动跳过标记，可在播放页记录时间段</string>
-    <string name="auto_skip_play">播放音频</string>
+    <string name="auto_skip_edit">编辑标记</string>
     <string name="auto_skip_delete">删除标记</string>
     <string name="auto_skip_delete_title">删除自动跳过标记？</string>
     <string name="auto_skip_delete_message">删除“%1$s”的标记 %2$s–%3$s？</string>
+    <string name="auto_skip_editor_title">自动跳过标记</string>
+    <string name="auto_skip_start_time">开始时间</string>
+    <string name="auto_skip_end_time">结束时间</string>
+    <string name="auto_skip_adjust_decrease">减少时间</string>
+    <string name="auto_skip_adjust_increase">增加时间</string>
+    <string name="auto_skip_test">测试</string>
+    <string name="auto_skip_invalid_time">请输入非负整数毫秒</string>
+    <string name="auto_skip_invalid_time_format">请输入“分:秒.毫秒”格式</string>
+    <string name="auto_skip_time_input_label">时间</string>
+    <string name="auto_skip_time_format_hint">格式：分:秒.毫秒，例如 01:23.400</string>
+    <string name="auto_skip_invalid_end">结束标记时间必须晚于 %1$d分%2$02d秒</string>
+    <string name="auto_skip_duration_exceeded">结束标记时间不能超过音频时长 %1$d分%2$02d秒</string>
 </resources>

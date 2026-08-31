@@ -7,11 +7,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -46,6 +47,7 @@ fun AutoSkipScreen(
     audioItems: List<AudioItem>,
     onBack: () -> Unit,
     onPlay: (String) -> Unit,
+    onEdit: (String) -> Unit,
     onDelete: (String) -> Unit,
 ) {
     var segmentToDelete by remember { mutableStateOf<AutoSkipSegment?>(null) }
@@ -113,6 +115,7 @@ fun AutoSkipScreen(
                                 segment = segment,
                                 item = item,
                                 onPlay = { onPlay(segment.audioKey) },
+                                onEdit = { onEdit(segment.id) },
                                 onDelete = { segmentToDelete = segment },
                             )
                         }
@@ -163,12 +166,16 @@ private fun AutoSkipRow(
     segment: AutoSkipSegment,
     item: AudioItem?,
     onPlay: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val title = item?.title ?: segment.titleSnapshot
     val path = item?.let { displayPath(it.folderName, it.relativePath) }
         ?: displayPath(segment.folderNameSnapshot, segment.relativePath)
     ListItem(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = item != null, onClick = onPlay),
         headlineContent = {
             Text(
                 text = title,
@@ -193,10 +200,10 @@ private fun AutoSkipRow(
         },
         trailingContent = {
             Row {
-                IconButton(onClick = onPlay, enabled = item != null) {
+                IconButton(onClick = onEdit, enabled = item != null) {
                     Icon(
-                        Icons.Filled.PlayArrow,
-                        contentDescription = stringResource(R.string.auto_skip_play),
+                        Icons.Filled.Edit,
+                        contentDescription = stringResource(R.string.auto_skip_edit),
                     )
                 }
                 IconButton(onClick = onDelete) {

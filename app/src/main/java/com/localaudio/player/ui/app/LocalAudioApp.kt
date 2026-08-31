@@ -104,6 +104,7 @@ fun LocalAudioApp(
                             audioItems = state.library.items,
                             onBack = { onEvent(AppEvent.Back) },
                             onPlay = { onEvent(AppEvent.PlayAutoSkipAudio(it)) },
+                            onEdit = { onEvent(AppEvent.EditAutoSkipSegment(it)) },
                             onDelete = { onEvent(AppEvent.DeleteAutoSkipSegment(it)) },
                         )
                         else -> error("Unexpected secondary screen: ${state.screen}")

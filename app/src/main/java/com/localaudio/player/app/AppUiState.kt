@@ -18,6 +18,13 @@ sealed interface AppDialog {
     data object Queue : AppDialog
     data object Mode : AppDialog
     data class DirectorySkip(val folderUri: String, val relativePath: String) : AppDialog
+    data class AutoSkipEditor(
+        val audioKey: String,
+        val segmentId: String?,
+        val startMs: Long,
+        val endMs: Long,
+        val durationMs: Long,
+    ) : AppDialog
     data object Timer : AppDialog
     data object Theme : AppDialog
     data object Header : AppDialog
@@ -70,7 +77,19 @@ sealed interface AppEvent {
     data object FinishAutoSkipMark : AppEvent
     data object OpenAutoSkipSettings : AppEvent
     data class DeleteAutoSkipSegment(val id: String) : AppEvent
+    data class EditAutoSkipSegment(val id: String) : AppEvent
     data class PlayAutoSkipAudio(val audioKey: String) : AppEvent
+    data class TestAutoSkipSegment(
+        val audioKey: String,
+        val startMs: Long,
+        val endMs: Long,
+    ) : AppEvent
+    data class SaveAutoSkipSegment(
+        val audioKey: String,
+        val segmentId: String?,
+        val startMs: Long,
+        val endMs: Long,
+    ) : AppEvent
     data class SaveDirectorySkip(
         val folderUri: String,
         val relativePath: String,
@@ -93,4 +112,5 @@ sealed interface AppEvent {
 sealed interface AppEffect {
     data object OpenFolderPicker : AppEffect
     data object RequestNotificationPermission : AppEffect
+    data class ShowMessage(val message: String) : AppEffect
 }

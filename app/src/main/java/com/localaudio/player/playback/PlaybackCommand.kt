@@ -4,6 +4,13 @@ import com.localaudio.player.data.model.AudioItem
 
 sealed interface PlaybackCommand {
     data class PlayQueue(val items: List<AudioItem>, val index: Int) : PlaybackCommand
+    data class PreviewAutoSkip(
+        val queue: List<AudioItem>,
+        val index: Int,
+        val startMs: Long,
+        val endMs: Long,
+    ) : PlaybackCommand
+    data object CancelAutoSkipPreview : PlaybackCommand
     data class JumpToItem(val index: Int) : PlaybackCommand
     data object Play : PlaybackCommand
     data object Pause : PlaybackCommand

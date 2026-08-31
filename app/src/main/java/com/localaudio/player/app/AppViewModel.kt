@@ -12,6 +12,7 @@ import com.localaudio.player.data.skip.AutoSkipRepository
 import com.localaudio.player.data.skip.DirectorySkipRepository
 import com.localaudio.player.playback.PlaybackCommand
 import com.localaudio.player.playback.PlaybackConnection
+import com.localaudio.player.playback.PlaybackState
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -120,7 +121,10 @@ class AppViewModel(
             AppEvent.FinishAutoSkipMark -> finishAutoSkipMark()
             AppEvent.OpenAutoSkipSettings -> navigateTo(AppScreen.AUTO_SKIP_SETTINGS)
             is AppEvent.DeleteAutoSkipSegment -> autoSkipRepository.delete(event.id)
+            is AppEvent.EditAutoSkipSegment -> editAutoSkipSegment(event.id)
             is AppEvent.PlayAutoSkipAudio -> playAutoSkipAudio(event.audioKey)
+            is AppEvent.TestAutoSkipSegment -> testAutoSkipSegment(event)
+            is AppEvent.SaveAutoSkipSegment -> saveAutoSkipSegment(event)
             is AppEvent.SaveDirectorySkip -> directorySkipRepository.save(
                 folderUri = event.folderUri,
                 relativePath = event.relativePath,
@@ -131,7 +135,12 @@ class AppViewModel(
             is AppEvent.FolderSelected -> libraryRepository.addFolder(event.uri)
             is AppEvent.Playback -> playbackConnection.dispatch(event.command)
             is AppEvent.ShowDialog -> navigation.update { it.copy(dialog = event.dialog) }
-            AppEvent.DismissDialog -> navigation.update { it.copy(dialog = null) }
+            AppEvent.DismissDialog -> {
+                if (navigation.value.dialog is AppDialog.AutoSkipEditor) {
+                    playbackConnection.dispatch(PlaybackCommand.CancelAutoSkipPreview)
+                }
+                navigation.update { it.copy(dialog = null) }
+            }
             is AppEvent.UpdateSetting -> updateSetting(event.change)
             is AppEvent.RescanFolder -> libraryRepository.rescan(event.uri)
             is AppEvent.RemoveFolder -> removeFolder(event.uri)
@@ -216,12 +225,113 @@ class AppViewModel(
             activeAutoSkipMark.value = null
             return
         }
-        autoSkipRepository.add(
-            item = item,
-            startMs = active.startMs,
-            endMs = playback.positionMs.coerceAtLeast(0L),
-        ) ?: return
+        val endMs = playback.positionMs.coerceAtLeast(0L)
+        val durationMs = knownDuration(item, playback)
+        validateAutoSkipTimes(active.startMs, endMs, durationMs)?.let {
+            showMessage(it)
+            return
+        }
         activeAutoSkipMark.value = null
+        navigation.update {
+            it.copy(
+                dialog = AppDialog.AutoSkipEditor(
+                    audioKey = item.key,
+                    segmentId = null,
+                    startMs = active.startMs,
+                    endMs = endMs,
+                    durationMs = durationMs,
+                ),
+            )
+        }
+    }
+
+    private fun editAutoSkipSegment(id: String) {
+        val segment = autoSkipRepository.state.value.firstOrNull { it.id == id } ?: return
+        val item = libraryRepository.state.value.items.firstOrNull { it.key == segment.audioKey } ?: return
+        val playback = playbackConnection.state.value
+        navigation.update {
+            it.copy(
+                dialog = AppDialog.AutoSkipEditor(
+                    audioKey = segment.audioKey,
+                    segmentId = segment.id,
+                    startMs = segment.startMs,
+                    endMs = segment.endMs,
+                    durationMs = knownDuration(item, playback),
+                ),
+            )
+        }
+    }
+
+    private fun testAutoSkipSegment(event: AppEvent.TestAutoSkipSegment) {
+        val item = libraryRepository.state.value.items.firstOrNull { it.key == event.audioKey } ?: return
+        val playback = playbackConnection.state.value
+        val durationMs = knownDuration(item, playback)
+        validateAutoSkipTimes(event.startMs, event.endMs, durationMs)?.let {
+            showMessage(it)
+            return
+        }
+        homeRowsBuilder.queueFor(libraryRepository.state.value.items, item)?.let { (queue, index) ->
+            playbackConnection.dispatch(
+                PlaybackCommand.PreviewAutoSkip(
+                    queue = queue,
+                    index = index,
+                    startMs = event.startMs,
+                    endMs = event.endMs,
+                ),
+            )
+        }
+    }
+
+    private fun saveAutoSkipSegment(event: AppEvent.SaveAutoSkipSegment) {
+        val item = libraryRepository.state.value.items.firstOrNull { it.key == event.audioKey } ?: run {
+            showMessage("音频已不存在，无法保存自动跳过标记")
+            return
+        }
+        val playback = playbackConnection.state.value
+        val durationMs = knownDuration(item, playback)
+        validateAutoSkipTimes(event.startMs, event.endMs, durationMs)?.let {
+            showMessage(it)
+            return
+        }
+        val saved = if (event.segmentId == null) {
+            autoSkipRepository.add(item, event.startMs, event.endMs)
+        } else {
+            autoSkipRepository.update(event.segmentId, event.startMs, event.endMs)
+        }
+        if (saved == null) {
+            showMessage("自动跳过标记保存失败")
+            return
+        }
+        playbackConnection.dispatch(PlaybackCommand.CancelAutoSkipPreview)
+        navigation.update { it.copy(dialog = null) }
+    }
+
+    private fun knownDuration(item: AudioItem, playback: PlaybackState): Long {
+        return if (playback.currentItem?.key == item.key && playback.durationMs > 0L) {
+            playback.durationMs
+        } else {
+            item.durationMs.coerceAtLeast(0L)
+        }
+    }
+
+    private fun validateAutoSkipTimes(startMs: Long, endMs: Long, durationMs: Long): String? {
+        if (startMs < 0L || endMs < 0L) return "标记时间必须是非负数"
+        if (endMs <= startMs) {
+            return "结束标记时间必须晚于 ${formatAutoSkipTime(startMs)}"
+        }
+        if (durationMs > 0L && endMs > durationMs) {
+            return "结束标记时间不能超过音频时长 ${formatAutoSkipTime(durationMs)}"
+        }
+        return null
+    }
+
+    private fun formatAutoSkipTime(timeMs: Long): String {
+        val totalSeconds = timeMs.coerceAtLeast(0L) / 1_000L
+        return "${totalSeconds / 60L}分${(totalSeconds % 60L).toString().padStart(2, '0')}秒"
+    }
+
+    private fun showMessage(message: String) {
+        _effects.trySend(AppEffect.ShowMessage(message))
     }
 
     private fun removeFolder(uri: String) {

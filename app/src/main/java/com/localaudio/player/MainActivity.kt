@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowInsetsController
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
@@ -57,6 +58,11 @@ class MainActivity : ComponentActivity() {
                         when (effect) {
                             AppEffect.OpenFolderPicker -> folderPicker.launch(null)
                             AppEffect.RequestNotificationPermission -> requestNotificationPermission()
+                            is AppEffect.ShowMessage -> Toast.makeText(
+                                this@MainActivity,
+                                effect.message,
+                                Toast.LENGTH_SHORT,
+                            ).show()
                         }
                     }
                 }

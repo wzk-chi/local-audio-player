@@ -6,12 +6,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -19,6 +22,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -29,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -105,6 +110,37 @@ internal fun AppDialogs(
                         ),
                     )
                     onEvent(AppEvent.DismissDialog)
+                },
+                onDismiss = { onEvent(AppEvent.DismissDialog) },
+            )
+        }
+        is AppDialog.AutoSkipEditor -> {
+            val item = state.library.items.firstOrNull { it.key == current.audioKey }
+            AutoSkipEditorDialog(
+                title = item?.title ?: current.audioKey,
+                segmentId = current.segmentId,
+                audioKey = current.audioKey,
+                startMs = current.startMs,
+                endMs = current.endMs,
+                durationMs = current.durationMs,
+                onTest = { start, end ->
+                    onEvent(
+                        AppEvent.TestAutoSkipSegment(
+                            audioKey = current.audioKey,
+                            startMs = start,
+                            endMs = end,
+                        ),
+                    )
+                },
+                onSave = { start, end ->
+                    onEvent(
+                        AppEvent.SaveAutoSkipSegment(
+                            audioKey = current.audioKey,
+                            segmentId = current.segmentId,
+                            startMs = start,
+                            endMs = end,
+                        ),
+                    )
                 },
                 onDismiss = { onEvent(AppEvent.DismissDialog) },
             )
@@ -187,6 +223,295 @@ internal fun AppDialogs(
         )
         null -> Unit
     }
+}
+
+@Composable
+private fun AutoSkipEditorDialog(
+    title: String,
+    segmentId: String?,
+    audioKey: String,
+    startMs: Long,
+    endMs: Long,
+    durationMs: Long,
+    onTest: (Long, Long) -> Unit,
+    onSave: (Long, Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var editedStartMs by remember(segmentId, audioKey, startMs) { mutableStateOf(startMs) }
+    var editedEndMs by remember(segmentId, audioKey, endMs) { mutableStateOf(endMs) }
+    var preciseEditor by remember { mutableStateOf<AutoSkipTimeField?>(null) }
+    val start = editedStartMs
+    val end = editedEndMs
+    val validationMessage = when {
+        end <= start -> stringResource(
+            R.string.auto_skip_invalid_end,
+            start / 60_000L,
+            (start / 1_000L % 60L).toInt(),
+        )
+        durationMs > 0L && end > durationMs -> stringResource(
+            R.string.auto_skip_duration_exceeded,
+            durationMs / 60_000L,
+            (durationMs / 1_000L % 60L).toInt(),
+        )
+        else -> null
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.auto_skip_editor_title)) },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                AutoSkipTimeAdjuster(
+                    label = stringResource(R.string.auto_skip_start_time),
+                    valueMs = editedStartMs,
+                    maxDurationMs = durationMs,
+                    onValueChange = { editedStartMs = it },
+                    onPreciseEdit = { preciseEditor = AutoSkipTimeField.START },
+                )
+                AutoSkipTimeAdjuster(
+                    label = stringResource(R.string.auto_skip_end_time),
+                    valueMs = editedEndMs,
+                    maxDurationMs = durationMs,
+                    onValueChange = { editedEndMs = it },
+                    onPreciseEdit = { preciseEditor = AutoSkipTimeField.END },
+                )
+                validationMessage?.let {
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.library_cancel))
+            }
+        },
+        confirmButton = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                TextButton(
+                    enabled = validationMessage == null,
+                    onClick = { onTest(start, end) },
+                ) {
+                    Text(stringResource(R.string.auto_skip_test))
+                }
+                TextButton(
+                    enabled = validationMessage == null,
+                    onClick = { onSave(start, end) },
+                ) {
+                    Text(stringResource(R.string.dialog_save))
+                }
+            }
+        },
+    )
+    preciseEditor?.let { field ->
+        val initialValue = if (field == AutoSkipTimeField.START) editedStartMs else editedEndMs
+        val otherValue = if (field == AutoSkipTimeField.START) editedEndMs else editedStartMs
+        AutoSkipPreciseTimeDialog(
+            field = field,
+            initialValueMs = initialValue,
+            otherValueMs = otherValue,
+            durationMs = durationMs,
+            onSave = { value ->
+                if (field == AutoSkipTimeField.START) {
+                    editedStartMs = value
+                } else {
+                    editedEndMs = value
+                }
+                preciseEditor = null
+            },
+            onDismiss = { preciseEditor = null },
+        )
+    }
+}
+
+private enum class AutoSkipTimeField {
+    START,
+    END,
+}
+
+@Composable
+private fun AutoSkipTimeAdjuster(
+    label: String,
+    valueMs: Long,
+    maxDurationMs: Long,
+    onValueChange: (Long) -> Unit,
+    onPreciseEdit: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.weight(0.7f),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        IconButton(
+            onClick = {
+                onValueChange(adjustAutoSkipTime(valueMs, -AUTO_SKIP_ADJUST_STEP_MS, maxDurationMs))
+            },
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Remove,
+                contentDescription = stringResource(R.string.auto_skip_adjust_decrease),
+            )
+        }
+        OutlinedButton(
+            onClick = onPreciseEdit,
+            modifier = Modifier.weight(1.6f),
+        ) {
+            Text(
+                text = formatAutoSkipDisplayTime(valueMs),
+                maxLines = 1,
+            )
+        }
+        IconButton(
+            onClick = {
+                onValueChange(adjustAutoSkipTime(valueMs, AUTO_SKIP_ADJUST_STEP_MS, maxDurationMs))
+            },
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = stringResource(R.string.auto_skip_adjust_increase),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AutoSkipPreciseTimeDialog(
+    field: AutoSkipTimeField,
+    initialValueMs: Long,
+    otherValueMs: Long,
+    durationMs: Long,
+    onSave: (Long) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember(field, initialValueMs) {
+        mutableStateOf(formatAutoSkipDisplayTime(initialValueMs))
+    }
+    val parsedValueMs = parseAutoSkipDisplayTime(text)
+    val validationMessage = if (parsedValueMs == null) {
+        stringResource(R.string.auto_skip_invalid_time_format)
+    } else {
+        val start = if (field == AutoSkipTimeField.START) parsedValueMs else otherValueMs
+        val end = if (field == AutoSkipTimeField.END) parsedValueMs else otherValueMs
+        when {
+            start < 0L || end < 0L -> stringResource(R.string.auto_skip_invalid_time)
+            end <= start -> stringResource(
+                R.string.auto_skip_invalid_end,
+                start / 60_000L,
+                (start / 1_000L % 60L).toInt(),
+            )
+            durationMs > 0L && end > durationMs -> stringResource(
+                R.string.auto_skip_duration_exceeded,
+                durationMs / 60_000L,
+                (durationMs / 1_000L % 60L).toInt(),
+            )
+            else -> null
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                stringResource(
+                    if (field == AutoSkipTimeField.START) {
+                        R.string.auto_skip_start_time
+                    } else {
+                        R.string.auto_skip_end_time
+                    },
+                ),
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = {
+                        text = it.filter { character ->
+                            character.isDigit() || character == ':' || character == '.'
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    isError = validationMessage != null,
+                    label = { Text(stringResource(R.string.auto_skip_time_input_label)) },
+                    supportingText = {
+                        Text(
+                            validationMessage ?: stringResource(R.string.auto_skip_time_format_hint),
+                            color = if (validationMessage != null) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+                )
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_cancel)) } },
+        confirmButton = {
+            TextButton(
+                enabled = validationMessage == null,
+                onClick = { parsedValueMs?.let(onSave) },
+            ) {
+                Text(stringResource(R.string.dialog_confirm))
+            }
+        },
+    )
+}
+
+private const val AUTO_SKIP_ADJUST_STEP_MS = 100L
+
+private fun adjustAutoSkipTime(valueMs: Long, deltaMs: Long, maxDurationMs: Long): Long {
+    val adjusted = if (deltaMs < 0L) {
+        valueMs.coerceAtLeast(-deltaMs)
+    } else if (valueMs > Long.MAX_VALUE - deltaMs) {
+        Long.MAX_VALUE
+    } else {
+        valueMs + deltaMs
+    }
+    return if (maxDurationMs > 0L) adjusted.coerceAtMost(maxDurationMs) else adjusted
+}
+
+private fun formatAutoSkipDisplayTime(timeMs: Long): String {
+    val safeTimeMs = timeMs.coerceAtLeast(0L)
+    val minutes = safeTimeMs / 60_000L
+    val seconds = (safeTimeMs / 1_000L % 60L).toString().padStart(2, '0')
+    val milliseconds = (safeTimeMs % 1_000L).toString().padStart(3, '0')
+    return "$minutes:$seconds.$milliseconds"
+}
+
+private fun parseAutoSkipDisplayTime(text: String): Long? {
+    val parts = text.split(':')
+    if (parts.size != 2) return null
+    val minutes = parts[0].toLongOrNull()?.takeIf { it >= 0L } ?: return null
+    val secondParts = parts[1].split('.')
+    if (secondParts.size > 2) return null
+    val seconds = secondParts[0].toLongOrNull()?.takeIf { it in 0L..59L } ?: return null
+    val fractionText = secondParts.getOrNull(1).orEmpty()
+    if (fractionText.length > 3 || (fractionText.isNotEmpty() && !fractionText.all(Char::isDigit))) {
+        return null
+    }
+    val fraction = fractionText.padEnd(3, '0').toLongOrNull() ?: 0L
+    if (minutes > (Long.MAX_VALUE - seconds * 1_000L - fraction) / 60_000L) return null
+    return minutes * 60_000L + seconds * 1_000L + fraction
 }
 
 @Composable

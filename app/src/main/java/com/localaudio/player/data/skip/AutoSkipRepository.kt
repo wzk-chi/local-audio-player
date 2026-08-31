@@ -31,7 +31,7 @@ class AutoSkipRepository(
             relativePath = item.relativePath,
             startMs = start,
             endMs = end,
-            modifiedAtMs = System.currentTimeMillis(),
+            modifiedAtMs = nextModifiedAtMs(),
         )
         updateSegments { it + segment }
         return segment
@@ -39,6 +39,22 @@ class AutoSkipRepository(
 
     fun delete(id: String) {
         updateSegments { segments -> segments.filterNot { it.id == id } }
+    }
+
+    fun update(id: String, startMs: Long, endMs: Long): AutoSkipSegment? {
+        val start = startMs.coerceAtLeast(0L)
+        val end = endMs.coerceAtLeast(0L)
+        if (end <= start) return null
+        val existing = _state.value.firstOrNull { it.id == id } ?: return null
+        val updated = existing.copy(
+            startMs = start,
+            endMs = end,
+            modifiedAtMs = nextModifiedAtMs(),
+        )
+        updateSegments { segments ->
+            segments.map { segment -> if (segment.id == id) updated else segment }
+        }
+        return updated
     }
 
     fun segmentsFor(audioKey: String): List<AutoSkipSegment> = _state.value
@@ -73,5 +89,15 @@ class AutoSkipRepository(
 
     private fun persist(segments: List<AutoSkipSegment>) {
         executor.execute { runCatching { store.writeSegments(segments) } }
+    }
+
+    private fun nextModifiedAtMs(): Long {
+        val now = System.currentTimeMillis()
+        val latest = _state.value.maxOfOrNull { it.modifiedAtMs } ?: Long.MIN_VALUE
+        return if (latest == Long.MAX_VALUE) {
+            latest
+        } else {
+            maxOf(now, latest + 1L)
+        }
     }
 }

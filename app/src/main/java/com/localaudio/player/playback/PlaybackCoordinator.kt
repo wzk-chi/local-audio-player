@@ -39,11 +39,13 @@ class PlaybackCoordinator(
     private var fadeInComplete = true
     private var fadeOutActive = false
     private var fadeTickActive = false
+    private var autoSkipPreview: AutoSkipPreview? = null
 
     private val tick = object : Runnable {
         override fun run() {
             tickScheduled = false
             checkTimer()
+            checkAutoSkipPreview()
             checkAutoSkip()
             updateFadeVolume()
             publishState()
@@ -76,6 +78,13 @@ class PlaybackCoordinator(
     private fun dispatchOnMain(command: PlaybackCommand) {
         when (command) {
             is PlaybackCommand.PlayQueue -> playQueue(command.items, command.index)
+            is PlaybackCommand.PreviewAutoSkip -> previewAutoSkip(
+                items = command.queue,
+                index = command.index,
+                startMs = command.startMs,
+                endMs = command.endMs,
+            )
+            PlaybackCommand.CancelAutoSkipPreview -> cancelAutoSkipPreview()
             is PlaybackCommand.JumpToItem -> jumpToItem(command.index)
             PlaybackCommand.Play -> play()
             PlaybackCommand.Pause -> pause()
@@ -112,6 +121,7 @@ class PlaybackCoordinator(
 
     private fun playQueue(items: List<AudioItem>, index: Int) {
         if (items.isEmpty()) return
+        autoSkipPreview = null
         queue = items.toList()
         currentIndex = index.coerceIn(0, queue.lastIndex)
         consecutiveLoadFailures = 0
@@ -122,6 +132,30 @@ class PlaybackCoordinator(
         if (index !in queue.indices) return
         consecutiveLoadFailures = 0
         selectTrack(index, shouldPlay = true, restartAutomaticTimer = true)
+    }
+
+    private fun previewAutoSkip(items: List<AudioItem>, index: Int, startMs: Long, endMs: Long) {
+        val start = startMs.coerceAtLeast(0L)
+        val end = endMs.coerceAtLeast(0L)
+        if (items.isEmpty() || end <= start) return
+        queue = items.toList()
+        currentIndex = index.coerceIn(0, queue.lastIndex)
+        consecutiveLoadFailures = 0
+        autoSkipPreview = AutoSkipPreview(queue[currentIndex].key, start, end)
+        savedPositionMs = subtractSafely(start, PREVIEW_PADDING_MS)
+        pendingSeekMs = savedPositionMs
+        desiredPlaying = true
+        resetFadeForTrack()
+        loadCurrent()
+    }
+
+    private fun cancelAutoSkipPreview() {
+        if (autoSkipPreview == null) return
+        desiredPlaying = false
+        pausePlayer()
+        autoSkipPreview = null
+        persistPlayback()
+        publishState()
     }
 
     private fun play() {
@@ -235,6 +269,7 @@ class PlaybackCoordinator(
         shouldPlay: Boolean,
         restartAutomaticTimer: Boolean,
     ) {
+        autoSkipPreview = null
         currentIndex = index
         savedPositionMs = 0L
         pendingSeekMs = null
@@ -271,6 +306,15 @@ class PlaybackCoordinator(
     private fun handleTerminal(failed: Boolean) {
         if (handledTerminalGeneration == currentGeneration) return
         handledTerminalGeneration = currentGeneration
+        if (autoSkipPreview?.audioKey == queue.getOrNull(currentIndex)?.key) {
+            if (player?.isPrepared == true) savedPositionMs = player?.positionMs() ?: savedPositionMs
+            desiredPlaying = false
+            autoSkipPreview = null
+            player?.pause()
+            persistPlayback()
+            publishState()
+            return
+        }
         if (failed) consecutiveLoadFailures++
         if (player?.isPrepared == true) savedPositionMs = player?.positionMs() ?: savedPositionMs
         player?.release()
@@ -361,6 +405,23 @@ class PlaybackCoordinator(
         skipCurrentSegmentIfNeeded()
     }
 
+    private fun checkAutoSkipPreview() {
+        val preview = autoSkipPreview ?: return
+        val currentPlayer = player ?: return
+        if (!currentPlayer.isPrepared || !currentPlayer.isPlaying()) return
+        val duration = currentPlayer.durationMs().coerceAtLeast(0L)
+        val stopAt = preview.stopAt(duration)
+        if (currentPosition() >= stopAt) {
+            currentPlayer.seekTo(stopAt)
+            currentPlayer.pause()
+            savedPositionMs = stopAt
+            pendingSeekMs = null
+            desiredPlaying = false
+            autoSkipPreview = null
+            persistPlayback()
+        }
+    }
+
     private fun resetFadeForTrack() {
         fadeInComplete = !settingsRepository.state.value.fadeEnabled
         fadeOutActive = false
@@ -416,8 +477,11 @@ class PlaybackCoordinator(
         val item = queue.getOrNull(currentIndex) ?: return false
         val position = currentPosition()
         val duration = currentPlayer.durationMs().coerceAtLeast(0L)
-        val segments = autoSkipRepository.segmentsFor(item.key)
-            .map { SkipRange(it.startMs, it.endMs) } + directorySkipSegments(item, duration)
+        val segments = autoSkipPreview
+            ?.takeIf { it.audioKey == item.key }
+            ?.let { listOf(SkipRange(it.startMs, it.endMs)) }
+            ?: (autoSkipRepository.segmentsFor(item.key)
+                .map { SkipRange(it.startMs, it.endMs) } + directorySkipSegments(item, duration))
         val sortedSegments = segments.sortedBy { it.startMs }
         var target = sortedSegments
             .firstOrNull { position >= it.startMs && position < it.endMs }
@@ -513,4 +577,26 @@ class PlaybackCoordinator(
         val startMs: Long,
         val endMs: Long,
     )
+
+    private data class AutoSkipPreview(
+        val audioKey: String,
+        val startMs: Long,
+        val endMs: Long,
+    ) {
+        fun stopAt(durationMs: Long): Long {
+            val paddedEnd = if (endMs > Long.MAX_VALUE - PREVIEW_PADDING_MS) {
+                Long.MAX_VALUE
+            } else {
+                endMs + PREVIEW_PADDING_MS
+            }
+            return if (durationMs > 0L) paddedEnd.coerceAtMost(durationMs) else paddedEnd
+        }
+    }
+
+    private companion object {
+        const val PREVIEW_PADDING_MS = 3_000L
+
+        fun subtractSafely(value: Long, amount: Long): Long =
+            if (value <= amount) 0L else value - amount
+    }
 }
