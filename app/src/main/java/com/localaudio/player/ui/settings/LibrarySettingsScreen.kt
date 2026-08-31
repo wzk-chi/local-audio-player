@@ -1,6 +1,7 @@
 package com.localaudio.player.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,6 +26,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -65,71 +67,73 @@ fun LibrarySettingsScreen(
                 }
             },
         )
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            if (folders.isEmpty()) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+        Box(modifier = Modifier.weight(1f)) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                if (folders.isEmpty()) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.large,
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                         ) {
-                            Text(stringResource(R.string.home_empty_library), style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                stringResource(R.string.library_empty_description),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            FilledTonalButton(onClick = onAddFolder) {
-                                Text(stringResource(R.string.home_add_folder))
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Text(stringResource(R.string.home_empty_library), style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    stringResource(R.string.library_empty_description),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                FilledTonalButton(onClick = onAddFolder) {
+                                    Text(stringResource(R.string.home_add_folder))
+                                }
                             }
                         }
                     }
-                }
-            } else {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    ) {
-                        folders.forEachIndexed { index, folder ->
-                            if (index > 0) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                } else {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.large,
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                        ) {
+                            folders.forEachIndexed { index, folder ->
+                                if (index > 0) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                                    )
+                                }
+                                FolderSettingRow(
+                                    folder = folder,
+                                    state = scanStates[folder.uri] ?: ScanState.Idle,
+                                    onRescan = onRescanFolder,
+                                    onRemove = { folderToRemove = folder },
                                 )
                             }
-                            FolderSettingRow(
-                                folder = folder,
-                                state = scanStates[folder.uri] ?: ScanState.Idle,
-                                onRescan = onRescanFolder,
-                                onRemove = { folderToRemove = folder },
-                            )
                         }
                     }
                 }
-                item {
-                    LibraryActions(
-                        onAddFolder = onAddFolder,
-                        onRescanAll = onRescanAll,
-                    )
-                }
             }
+        }
+        if (folders.isNotEmpty()) {
+            LibraryActions(
+                onAddFolder = onAddFolder,
+                onRescanAll = onRescanAll,
+            )
         }
     }
 
@@ -160,23 +164,30 @@ private fun LibraryActions(
     onAddFolder: () -> Unit,
     onRescanAll: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    Surface(
+        tonalElevation = 2.dp,
+        shadowElevation = 2.dp,
     ) {
-        OutlinedButton(
-            onClick = onRescanAll,
-            modifier = Modifier.weight(1f),
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Icon(Icons.Filled.Refresh, contentDescription = null)
-            Text(stringResource(R.string.library_rescan), modifier = Modifier.padding(start = 8.dp))
-        }
-        FilledTonalButton(
-            onClick = onAddFolder,
-            modifier = Modifier.weight(1f),
-        ) {
-            Icon(Icons.Filled.Folder, contentDescription = null)
-            Text(stringResource(R.string.home_add_folder), modifier = Modifier.padding(start = 8.dp))
+            OutlinedButton(
+                onClick = onRescanAll,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(Icons.Filled.Refresh, contentDescription = null)
+                Text(stringResource(R.string.library_rescan), modifier = Modifier.padding(start = 8.dp))
+            }
+            FilledTonalButton(
+                onClick = onAddFolder,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(Icons.Filled.Folder, contentDescription = null)
+                Text(stringResource(R.string.home_add_folder), modifier = Modifier.padding(start = 8.dp))
+            }
         }
     }
 }

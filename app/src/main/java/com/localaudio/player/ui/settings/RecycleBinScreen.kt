@@ -2,12 +2,14 @@ package com.localaudio.player.ui.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -19,15 +21,20 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -38,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -97,79 +105,78 @@ fun RecycleBinScreen(
                 }
             },
         )
-        if (entries.isEmpty()) {
-            Text(
-                text = stringResource(R.string.recycle_bin_empty),
-                modifier = Modifier.padding(24.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                    ) {
-                        entries.forEach { entry ->
-                            when (entry) {
-                                is RecycleEntry.Folder -> RecycleFolderGroup(
-                                    entry = entry,
-                                    selected = entry.key in selected,
-                                    onSelectedChange = { checked ->
-                                        selected = if (checked) selected + entry.key else selected - entry.key
-                                    },
-                                    selectedChildren = selected,
-                                    onChildSelectedChange = { key, checked ->
-                                        selected = if (checked) selected + key else selected - key
-                                    },
-                                )
-                                is RecycleEntry.Audio -> RecycleRow(
-                                    entry = entry,
-                                    selected = entry.key in selected,
-                                    onSelectedChange = { checked ->
-                                        selected = if (checked) selected + entry.key else selected - entry.key
-                                    },
-                                )
+        Box(modifier = Modifier.weight(1f)) {
+            if (entries.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.recycle_bin_empty),
+                    modifier = Modifier.padding(24.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.large,
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                        ) {
+                            entries.forEachIndexed { index, entry ->
+                                if (index > 0) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                                    )
+                                }
+                                when (entry) {
+                                    is RecycleEntry.Folder -> RecycleFolderGroup(
+                                        entry = entry,
+                                        selected = entry.key in selected,
+                                        onSelectedChange = { checked ->
+                                            val childKeys = entry.children.mapTo(HashSet()) { "item:${it.key}" }
+                                            selected = if (checked) {
+                                                selected + entry.key + childKeys
+                                            } else {
+                                                selected - entry.key - childKeys
+                                            }
+                                        },
+                                        selectedChildren = selected,
+                                        onChildSelectedChange = { key, checked ->
+                                            val next = if (checked) selected + key else selected - key
+                                            val childKeys = entry.children.mapTo(HashSet()) { "item:${it.key}" }
+                                            selected = if (childKeys.isNotEmpty() && next.containsAll(childKeys)) {
+                                                next + entry.key
+                                            } else {
+                                                next - entry.key
+                                            }
+                                        },
+                                    )
+                                    is RecycleEntry.Audio -> RecycleRow(
+                                        entry = entry,
+                                        selected = entry.key in selected,
+                                        onSelectedChange = { checked ->
+                                            selected = if (checked) selected + entry.key else selected - entry.key
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
                 }
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        TextButton(
-                            onClick = { onRestore(selected); selected = emptySet() },
-                            enabled = selected.isNotEmpty(),
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(Icons.Filled.Restore, contentDescription = null)
-                            Text(stringResource(R.string.recycle_bin_restore), modifier = Modifier.padding(start = 8.dp))
-                        }
-                        TextButton(
-                            onClick = { showCleanConfirmation = true },
-                            enabled = selected.isNotEmpty(),
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(Icons.Filled.Delete, contentDescription = null)
-                            Text(
-                                stringResource(R.string.recycle_bin_clean),
-                                modifier = Modifier.padding(start = 8.dp),
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                    }
-                }
             }
+        }
+        if (entries.isNotEmpty()) {
+            RecycleActions(
+                selected = selected,
+                onRestore = { onRestore(selected); selected = emptySet() },
+                onClean = { showCleanConfirmation = true },
+            )
         }
     }
 
@@ -209,7 +216,7 @@ private fun RecycleRow(
             .fillMaxWidth()
             .clickable { onSelectedChange(!selected) },
         leadingContent = {
-            Checkbox(checked = selected, onCheckedChange = onSelectedChange)
+            Icon(entry.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         },
         headlineContent = {
             Text(
@@ -237,7 +244,7 @@ private fun RecycleRow(
             }
         },
         trailingContent = {
-            Icon(entry.icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Checkbox(checked = selected, onCheckedChange = onSelectedChange)
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
@@ -258,7 +265,11 @@ private fun RecycleFolderGroup(
             .fillMaxWidth()
             .clickable { onSelectedChange(!selected) },
         leadingContent = {
-            Checkbox(checked = selected, onCheckedChange = onSelectedChange)
+            Icon(
+                Icons.Filled.Folder,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
         },
         headlineContent = {
             Text(
@@ -282,7 +293,6 @@ private fun RecycleFolderGroup(
         },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (entry.children.isNotEmpty()) {
                     IconButton(onClick = { expanded = !expanded }) {
                         Icon(
@@ -291,19 +301,27 @@ private fun RecycleFolderGroup(
                         )
                     }
                 }
+                Checkbox(checked = selected, onCheckedChange = onSelectedChange)
             }
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
 
-    if (expanded) {
-        entry.children.forEach { item ->
-            val key = "item:${item.key}"
-            RecycleChildAudioRow(
-                item = item,
-                selected = key in selectedChildren,
-                onSelectedChange = { checked -> onChildSelectedChange(key, checked) },
-            )
+    if (expanded && entry.children.isNotEmpty()) {
+        Column(
+            modifier = Modifier
+                .padding(start = 20.dp, end = 12.dp, bottom = 8.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .background(MaterialTheme.colorScheme.surfaceContainer),
+        ) {
+            entry.children.forEach { item ->
+                val key = "item:${item.key}"
+                RecycleChildAudioRow(
+                    item = item,
+                    selected = key in selectedChildren,
+                    onSelectedChange = { checked -> onChildSelectedChange(key, checked) },
+                )
+            }
         }
     }
 }
@@ -317,9 +335,13 @@ private fun RecycleChildAudioRow(
     ListItem(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 56.dp),
+            .clickable { onSelectedChange(!selected) },
         leadingContent = {
-            Checkbox(checked = selected, onCheckedChange = onSelectedChange)
+            Icon(
+                Icons.Filled.MusicNote,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary,
+            )
         },
         headlineContent = {
             Text(
@@ -327,6 +349,9 @@ private fun RecycleChildAudioRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        },
+        trailingContent = {
+            Checkbox(checked = selected, onCheckedChange = onSelectedChange)
         },
         supportingContent = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -348,6 +373,45 @@ private fun RecycleChildAudioRow(
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
     )
+}
+
+@Composable
+private fun RecycleActions(
+    selected: Set<String>,
+    onRestore: () -> Unit,
+    onClean: () -> Unit,
+) {
+    Surface(
+        tonalElevation = 2.dp,
+        shadowElevation = 2.dp,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(
+                onClick = onRestore,
+                enabled = selected.isNotEmpty(),
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(Icons.Filled.Restore, contentDescription = null)
+                Text(stringResource(R.string.recycle_bin_restore), modifier = Modifier.padding(start = 8.dp))
+            }
+            FilledTonalButton(
+                onClick = onClean,
+                enabled = selected.isNotEmpty(),
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+            ) {
+                Icon(Icons.Filled.Delete, contentDescription = null)
+                Text(stringResource(R.string.recycle_bin_clean), modifier = Modifier.padding(start = 8.dp))
+            }
+        }
+    }
 }
 
 private sealed interface RecycleEntry {
@@ -373,7 +437,7 @@ private sealed interface RecycleEntry {
     ) : RecycleEntry {
         override val key: String = "folder:${folder.key}"
         override val title: String = folder.title
-        override val description: String = folder.relativePath.ifBlank { folder.rootFolderUri }
+        override val description: String = folder.relativePath.ifBlank { "源文件夹" }
         override val durationMs: Long = 0L
         override val deletedAtMs: Long = folder.deletedAtMs
         override val icon = Icons.Filled.Folder

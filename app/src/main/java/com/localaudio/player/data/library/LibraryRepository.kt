@@ -31,6 +31,7 @@ class LibraryRepository(
     private val recycleBinRepository: RecycleBinRepository,
 ) {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val fileOperationExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val jobs = HashMap<String, Future<*>>()
     private val scanTokens = HashMap<String, Long>()
@@ -122,7 +123,8 @@ class LibraryRepository(
             return
         }
 
-        executor.execute {
+        cancelScan(current.folderUri)
+        fileOperationExecutor.execute {
             val deleted = runCatching {
                 DocumentsContract.deleteDocument(context.contentResolver, current.uri)
             }.getOrDefault(false)
@@ -144,7 +146,8 @@ class LibraryRepository(
         onResult: (Result<Set<String>>) -> Unit,
     ) {
         val currentItems = itemsIn(location)
-        executor.execute {
+        if (deleteSource) cancelScan(location.folderUri)
+        fileOperationExecutor.execute {
             val directoryUri = resolveDirectoryUri(location)
             if (directoryUri == null) {
                 post { onResult(Result.failure(IllegalStateException("无法定位文件夹"))) }
@@ -338,7 +341,10 @@ class LibraryRepository(
             post { onResult(Result.failure(IllegalArgumentException("没有可清理的项目"))) }
             return
         }
-        executor.execute {
+        (items.map { it.folderUri } + folders.map { it.rootFolderUri })
+            .distinct()
+            .forEach(::cancelScan)
+        fileOperationExecutor.execute {
             var success = true
             folders.forEach { folder ->
                 val deleted = runCatching {
@@ -530,8 +536,17 @@ class LibraryRepository(
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             )
         }
+        cancelScan(uriString)
+    }
+
+    private fun cancelScan(uriString: String) {
         jobs.remove(uriString)?.cancel(true)
         scanTokens.remove(uriString)
+        _state.update { state ->
+            if (state.scanStates[uriString] == null) state else state.copy(
+                scanStates = state.scanStates + (uriString to ScanState.Idle),
+            )
+        }
     }
 
     private fun post(block: () -> Unit) = mainHandler.post(block)
