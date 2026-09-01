@@ -66,6 +66,8 @@ class PlaybackCoordinator(
     private var appliedVolume = -1f
     private var appliedGainDb = Float.NaN
     private var appliedEqualizer: EqualizerSettings? = null
+    private var lastPositionPersistedAtMs = SystemClock.elapsedRealtime()
+    private var lastPersistedPositionMs = savedPositionMs
 
     private val tick = object : Runnable {
         override fun run() {
@@ -79,9 +81,11 @@ class PlaybackCoordinator(
             } else {
                 updateFadeOut()
             }
+            persistPositionIfNeeded()
             publishState()
             if (player?.isPlaying() == true || timerState.expireAt > 0L ||
-                timerState.waitingForTrackEnd || pendingTrackSelection != null ||
+                (timerState.waitingForTrackEnd && player?.isPlaying() == true) ||
+                pendingTrackSelection != null ||
                 loudnessTransitionActive
             ) {
                 scheduleTick()
@@ -157,6 +161,7 @@ class PlaybackCoordinator(
         if (event.generation != currentGeneration) return
         when (event) {
             is PlayerEvent.Prepared -> onPrepared(event)
+            is PlayerEvent.SeekCompleted -> onSeekCompleted()
             is PlayerEvent.Completed -> handleTerminal(failed = false)
             is PlayerEvent.Failed -> handleTerminal(failed = true)
         }
@@ -260,7 +265,7 @@ class PlaybackCoordinator(
     private fun pausePlayer() {
         player?.let { currentPlayer ->
             if (currentPlayer.isPrepared) {
-                savedPositionMs = currentPlayer.positionMs()
+                savedPositionMs = currentPosition()
                 currentPlayer.pause()
             } else {
                 savedPositionMs = pendingSeekMs ?: savedPositionMs
@@ -365,13 +370,26 @@ class PlaybackCoordinator(
     }
 
     private fun replaceItem(oldKey: String, item: AudioItem) {
-        if (queue.none { it.key == oldKey }) return
+        val oldItem = queue.firstOrNull { it.key == oldKey } ?: return
         queue = queue.map { if (it.key == oldKey) item else it }
         if (queue.getOrNull(currentIndex)?.key == item.key) {
-            requestLoudnessAnalysis()
-            updateLoudnessGain()
+            if (oldItem.uri != item.uri) {
+                savedPositionMs = currentPosition()
+                loadCurrent()
+            } else {
+                requestLoudnessAnalysis()
+                updateLoudnessGain()
+            }
         }
         persistPlayback()
+        publishState()
+    }
+
+    private fun onSeekCompleted() {
+        pendingSeekMs?.let { target ->
+            savedPositionMs = target
+            pendingSeekMs = null
+        }
         publishState()
     }
 
@@ -903,11 +921,8 @@ class PlaybackCoordinator(
         }
     }
 
-    private fun currentPosition(): Long = if (player?.isPrepared == true) {
-        player?.positionMs() ?: savedPositionMs
-    } else {
-        pendingSeekMs ?: savedPositionMs
-    }
+    private fun currentPosition(): Long = pendingSeekMs
+        ?: if (player?.isPrepared == true) player?.positionMs() ?: savedPositionMs else savedPositionMs
 
     private fun currentDuration(): Long = if (player?.isPrepared == true) {
         player?.durationMs() ?: 0L
@@ -917,10 +932,26 @@ class PlaybackCoordinator(
 
     private fun persistPlayback() {
         if (queue.isNotEmpty() && currentIndex in queue.indices) {
+            val position = currentPosition()
             playbackStore.writeSnapshot(
-                PlaybackSnapshot(queue, currentIndex, currentPosition()),
+                PlaybackSnapshot(queue, currentIndex, position),
             )
+            lastPositionPersistedAtMs = SystemClock.elapsedRealtime()
+            lastPersistedPositionMs = position
+        } else {
+            playbackStore.clearSnapshot()
         }
+    }
+
+    private fun persistPositionIfNeeded() {
+        if (player?.isPlaying() != true || queue.isEmpty() || currentIndex !in queue.indices) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastPositionPersistedAtMs < POSITION_PERSIST_INTERVAL_MS) return
+        val position = currentPosition()
+        if (position == lastPersistedPositionMs) return
+        playbackStore.writePosition(position)
+        lastPositionPersistedAtMs = now
+        lastPersistedPositionMs = position
     }
 
     private fun publishState() {
@@ -977,6 +1008,7 @@ class PlaybackCoordinator(
     private companion object {
         const val PREVIEW_PADDING_MS = 3_000L
         const val GAIN_EPSILON = 0.001f
+        const val POSITION_PERSIST_INTERVAL_MS = 10_000L
 
         fun subtractSafely(value: Long, amount: Long): Long =
             if (value <= amount) 0L else value - amount

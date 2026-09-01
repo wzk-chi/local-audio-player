@@ -25,7 +25,10 @@ class PlaybackStore(context: Context) {
                 AudioItemJson.decode(array.getJSONObject(index))
             },
             currentIndex = json.optInt("index", 0).coerceIn(0, (array.length() - 1).coerceAtLeast(0)),
-            positionMs = json.optLong("position", 0L).coerceAtLeast(0L),
+            positionMs = preferences.getLong(
+                KEY_PLAYBACK_POSITION,
+                json.optLong("position", 0L),
+            ).coerceAtLeast(0L),
         )
     }.getOrNull()
 
@@ -43,10 +46,25 @@ class PlaybackStore(context: Context) {
                     .put("position", snapshot.positionMs)
                     .toString(),
             )
+            .putLong(KEY_PLAYBACK_POSITION, snapshot.positionMs.coerceAtLeast(0L))
+            .apply()
+    }
+
+    fun writePosition(positionMs: Long) {
+        preferences.edit()
+            .putLong(KEY_PLAYBACK_POSITION, positionMs.coerceAtLeast(0L))
+            .apply()
+    }
+
+    fun clearSnapshot() {
+        preferences.edit()
+            .remove(KEY_PLAYBACK_SNAPSHOT)
+            .remove(KEY_PLAYBACK_POSITION)
             .apply()
     }
 
     private companion object {
         const val KEY_PLAYBACK_SNAPSHOT = "playback_snapshot"
+        const val KEY_PLAYBACK_POSITION = "playback_position"
     }
 }

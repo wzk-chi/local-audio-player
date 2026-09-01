@@ -14,6 +14,7 @@ import android.os.Binder
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import com.localaudio.player.LocalAudioApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +42,9 @@ class PlaybackService : Service() {
     private var foregroundStarted = false
     private var lastMetadataSnapshot: MetadataSnapshot? = null
     private var lastNotificationSnapshot: NotificationSnapshot? = null
+    private var lastSessionSnapshot: SessionSnapshot? = null
+    private var lastPublishedPositionMs = 0L
+    private var lastSessionPositionUpdateAtMs = 0L
     private lateinit var coordinator: PlaybackCoordinator
     private lateinit var mediaSession: MediaSession
 
@@ -84,11 +88,19 @@ class PlaybackService : Service() {
             override fun onSeekTo(pos: Long) = coordinator.dispatch(PlaybackCommand.SeekTo(pos))
         }, Handler(Looper.getMainLooper()))
         mediaSession.setSessionActivity(mainActivityPendingIntent())
-        mediaSession.isActive = true
+        mediaSession.isActive = false
         serviceScope.launch {
             coordinator.state.collect { state ->
                 updateMediaSession(state)
-                if (foregroundStarted) updateNotification(state)
+                if (foregroundStarted) {
+                    if (state.currentItem == null) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        foregroundStarted = false
+                        lastNotificationSnapshot = null
+                    } else {
+                        updateNotification(state)
+                    }
+                }
             }
         }
     }
@@ -106,20 +118,36 @@ class PlaybackService : Service() {
     }
 
     private fun updateMediaSession(current: PlaybackState) {
-        val actions = SessionPlaybackState.ACTION_PLAY or SessionPlaybackState.ACTION_PAUSE or
-            SessionPlaybackState.ACTION_SKIP_TO_NEXT or SessionPlaybackState.ACTION_SKIP_TO_PREVIOUS or
-            SessionPlaybackState.ACTION_SEEK_TO
-        mediaSession.setPlaybackState(
-            SessionPlaybackState.Builder()
-                .setActions(actions)
-                .setState(
-                    if (current.isPlaying) SessionPlaybackState.STATE_PLAYING else SessionPlaybackState.STATE_PAUSED,
-                    current.positionMs,
-                    1f,
-                )
-                .build(),
-        )
         val item = current.currentItem
+        val sessionSnapshot = SessionSnapshot(
+            itemKey = item?.key,
+            durationMs = current.durationMs,
+            isPlaying = current.isPlaying,
+        )
+        val now = SystemClock.elapsedRealtime()
+        val shouldPublishPosition = lastSessionSnapshot == null ||
+            sessionSnapshot != lastSessionSnapshot ||
+            kotlin.math.abs(current.positionMs - lastPublishedPositionMs) >= SESSION_POSITION_JUMP_THRESHOLD_MS ||
+            now - lastSessionPositionUpdateAtMs >= SESSION_POSITION_UPDATE_INTERVAL_MS
+        if (shouldPublishPosition) {
+            val actions = SessionPlaybackState.ACTION_PLAY or SessionPlaybackState.ACTION_PAUSE or
+                SessionPlaybackState.ACTION_SKIP_TO_NEXT or SessionPlaybackState.ACTION_SKIP_TO_PREVIOUS or
+                SessionPlaybackState.ACTION_SEEK_TO
+            mediaSession.setPlaybackState(
+                SessionPlaybackState.Builder()
+                    .setActions(actions)
+                    .setState(
+                        if (current.isPlaying) SessionPlaybackState.STATE_PLAYING else SessionPlaybackState.STATE_PAUSED,
+                        current.positionMs,
+                        1f,
+                    )
+                    .build(),
+            )
+            lastSessionSnapshot = sessionSnapshot
+            lastPublishedPositionMs = current.positionMs
+            lastSessionPositionUpdateAtMs = now
+        }
+        mediaSession.isActive = item != null
         val metadataSnapshot = item?.let {
             MetadataSnapshot(
                 itemKey = it.key,
@@ -128,14 +156,16 @@ class PlaybackService : Service() {
                 durationMs = current.durationMs,
             )
         }
-        if (item != null && metadataSnapshot != lastMetadataSnapshot) {
+        if (metadataSnapshot != lastMetadataSnapshot) {
             lastMetadataSnapshot = metadataSnapshot
             mediaSession.setMetadata(
-                MediaMetadata.Builder()
-                    .putString(MediaMetadata.METADATA_KEY_TITLE, item.title)
-                    .putString(MediaMetadata.METADATA_KEY_ARTIST, item.artist)
-                    .putLong(MediaMetadata.METADATA_KEY_DURATION, current.durationMs)
-                    .build(),
+                metadataSnapshot?.let {
+                    MediaMetadata.Builder()
+                        .putString(MediaMetadata.METADATA_KEY_TITLE, it.title)
+                        .putString(MediaMetadata.METADATA_KEY_ARTIST, it.artist)
+                        .putLong(MediaMetadata.METADATA_KEY_DURATION, it.durationMs)
+                        .build()
+                } ?: MediaMetadata.Builder().build(),
             )
         }
     }
@@ -227,15 +257,6 @@ class PlaybackService : Service() {
         super.onDestroy()
     }
 
-    private companion object {
-        const val CHANNEL_ID = "playback_control"
-        const val NOTIFICATION_ID = 1001
-        const val ACTION_PLAY = "com.localaudio.player.PLAY"
-        const val ACTION_PAUSE = "com.localaudio.player.PAUSE"
-        const val ACTION_NEXT = "com.localaudio.player.NEXT"
-        const val ACTION_PREVIOUS = "com.localaudio.player.PREVIOUS"
-    }
-
     private data class MetadataSnapshot(
         val itemKey: String,
         val title: String,
@@ -250,10 +271,27 @@ class PlaybackService : Service() {
         val isPlaying: Boolean,
     )
 
+    private data class SessionSnapshot(
+        val itemKey: String?,
+        val durationMs: Long,
+        val isPlaying: Boolean,
+    )
+
     private fun PlaybackState.notificationSnapshot() = NotificationSnapshot(
         itemKey = currentItem?.key,
         title = currentItem?.title,
         artist = currentItem?.artist,
         isPlaying = isPlaying,
     )
+
+    private companion object {
+        const val CHANNEL_ID = "playback_control"
+        const val NOTIFICATION_ID = 1001
+        const val ACTION_PLAY = "com.localaudio.player.PLAY"
+        const val ACTION_PAUSE = "com.localaudio.player.PAUSE"
+        const val ACTION_NEXT = "com.localaudio.player.NEXT"
+        const val ACTION_PREVIOUS = "com.localaudio.player.PREVIOUS"
+        const val SESSION_POSITION_UPDATE_INTERVAL_MS = 500L
+        const val SESSION_POSITION_JUMP_THRESHOLD_MS = 1_000L
+    }
 }

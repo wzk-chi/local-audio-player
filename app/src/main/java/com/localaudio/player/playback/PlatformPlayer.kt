@@ -24,6 +24,7 @@ sealed interface PlayerEvent {
     val generation: Long
 
     data class Prepared(override val generation: Long, val durationMs: Long) : PlayerEvent
+    data class SeekCompleted(override val generation: Long) : PlayerEvent
     data class Completed(override val generation: Long) : PlayerEvent
     data class Failed(override val generation: Long) : PlayerEvent
 }
@@ -70,6 +71,11 @@ class PlatformPlayer(
             if (mediaPlayer !== player || currentGeneration != generation) return@setOnPreparedListener
             preparedGeneration = generation
             onEvent(PlayerEvent.Prepared(generation, it.duration.toLong()))
+        }
+        player.setOnSeekCompleteListener {
+            if (mediaPlayer === player && currentGeneration == generation) {
+                onEvent(PlayerEvent.SeekCompleted(generation))
+            }
         }
         player.setOnCompletionListener {
             if (mediaPlayer === player && currentGeneration == generation) {
@@ -161,6 +167,7 @@ class PlatformPlayer(
         mediaPlayer = null
         if (player != null) {
             player.setOnPreparedListener(null)
+            player.setOnSeekCompleteListener(null)
             player.setOnCompletionListener(null)
             player.setOnErrorListener(null)
             player.release()

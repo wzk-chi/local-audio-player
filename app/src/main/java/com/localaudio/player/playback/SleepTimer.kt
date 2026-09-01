@@ -1,5 +1,7 @@
 package com.localaudio.player.playback
 
+import android.os.SystemClock
+
 enum class TimerSource { MANUAL, AUTOMATIC }
 
 data class SleepTimerState(
@@ -16,7 +18,7 @@ sealed interface TimerDecision {
 }
 
 class SleepTimer(
-    private val now: () -> Long = System::currentTimeMillis,
+    private val now: () -> Long = SystemClock::elapsedRealtime,
 ) {
     fun start(durationMs: Long, source: TimerSource): SleepTimerState {
         val actualDurationMs = durationMs.coerceAtLeast(1_000L)
