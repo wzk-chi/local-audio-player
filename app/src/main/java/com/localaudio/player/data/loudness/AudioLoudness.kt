@@ -24,15 +24,16 @@ data class AudioLoudness(
 /** Calculates the bounded gain that should be applied to a measured audio track. */
 fun AudioLoudness.gainDb(offsetDb: Int): Float {
     val measuredLufs = integratedLufs.takeIf { it.isFinite() } ?: LOUDNESS_TARGET_LUFS
-    val requestedGain = LOUDNESS_TARGET_LUFS - measuredLufs + offsetDb
+    val normalizationGain = LOUDNESS_TARGET_LUFS - measuredLufs
     val peakDb = peak
         .coerceAtLeast(0f)
         .takeIf { it > 0f }
         ?.let { 20f * log10(it) }
-    val peakLimitedGain = if (peakDb != null && peakDb.isFinite()) {
-        minOf(requestedGain, LOUDNESS_PEAK_CEILING_DB - peakDb)
+    val peakLimitedNormalizationGain = if (peakDb != null && peakDb.isFinite()) {
+        minOf(normalizationGain, LOUDNESS_PEAK_CEILING_DB - peakDb)
     } else {
-        requestedGain
+        normalizationGain
     }
-    return peakLimitedGain.coerceIn(MIN_LOUDNESS_GAIN_DB, MAX_LOUDNESS_GAIN_DB)
+    return (peakLimitedNormalizationGain + offsetDb)
+        .coerceIn(MIN_LOUDNESS_GAIN_DB, MAX_LOUDNESS_GAIN_DB)
 }
