@@ -222,6 +222,7 @@ class PlaybackCoordinator(
         if (queue.isEmpty()) return
         startAutomaticTimer()
         desiredPlaying = true
+        requestLoudnessAnalysis()
         val currentPlayer = player
         if (currentPlayer == null || !currentPlayer.isPrepared) {
             loadCurrent()
@@ -362,6 +363,7 @@ class PlaybackCoordinator(
         if (queue.none { it.key == oldKey }) return
         queue = queue.map { if (it.key == oldKey) item else it }
         if (queue.getOrNull(currentIndex)?.key == item.key) {
+            requestLoudnessAnalysis()
             updateLoudnessGain()
         }
         persistPlayback()
@@ -686,7 +688,9 @@ class PlaybackCoordinator(
     }
 
     private fun requestLoudnessAnalysis() {
-        if (!settingsRepository.state.value.loudnessEnabled) return
+        if (!settingsRepository.state.value.loudnessEnabled ||
+            (!desiredPlaying && player?.isPlaying() != true)
+        ) return
         queue.getOrNull(currentIndex)?.let(loudnessRepository::ensureAnalysis)
     }
 

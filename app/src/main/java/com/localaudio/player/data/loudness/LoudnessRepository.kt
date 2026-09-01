@@ -21,6 +21,7 @@ class LoudnessRepository(
         }.apply { name = "local-audio-loudness" }
     }
     private val pendingHashes = ConcurrentHashMap.newKeySet<String>()
+    private val failedSources = ConcurrentHashMap.newKeySet<AnalysisKey>()
     private val _state = MutableStateFlow(store.readAll())
     private val _revision = MutableStateFlow(0L)
     private val resultsByHash = HashMap<String, AudioLoudness>().apply {
@@ -39,10 +40,17 @@ class LoudnessRepository(
     @Synchronized
     fun ensureAnalysis(item: AudioItem) {
         val contentHash = item.contentHash?.takeIf { it.isNotBlank() } ?: return
-        if (resultsByHash.containsKey(contentHash) || !pendingHashes.add(contentHash)) return
+        val source = AnalysisKey(contentHash = contentHash, uri = item.key)
+        if (resultsByHash.containsKey(contentHash) ||
+            source in failedSources ||
+            !pendingHashes.add(contentHash)
+        ) return
         executor.execute {
             try {
-                val measurement = analyzer.analyze(item.uri) ?: return@execute
+                val measurement = analyzer.analyze(item.uri) ?: run {
+                    failedSources.add(source)
+                    return@execute
+                }
                 val result = AudioLoudness(
                     contentHash = contentHash,
                     integratedLufs = measurement.integratedLufs,
@@ -59,6 +67,7 @@ class LoudnessRepository(
                 Thread.currentThread().interrupt()
             } catch (_: RuntimeException) {
                 // An unsupported decoder or revoked URI should not affect playback.
+                failedSources.add(source)
             } finally {
                 pendingHashes.remove(contentHash)
                 _revision.value = nextRevision(_revision.value)
@@ -72,4 +81,9 @@ class LoudnessRepository(
 
     private fun nextRevision(current: Long): Long =
         if (current == Long.MAX_VALUE) 0L else current + 1L
+
+    private data class AnalysisKey(
+        val contentHash: String,
+        val uri: String,
+    )
 }

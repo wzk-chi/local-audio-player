@@ -259,7 +259,9 @@ class LoudnessAnalyzer(private val context: Context) {
             const val HIGH_PASS_COEFFICIENT = 0.995f
             const val ABSOLUTE_GATE_POWER = 8.5e-8
             const val SILENCE_LUFS = -70f
-            const val ENCODING_PCM_24BIT_PACKED = 5
+            // AudioFormat.ENCODING_PCM_24BIT_PACKED (introduced in API 31) is 21.
+            // Keep the literal here so the analyzer remains safe on the min SDK.
+            const val ENCODING_PCM_24BIT_PACKED = 21
             const val ENCODING_PCM_32BIT = 22
         }
     }

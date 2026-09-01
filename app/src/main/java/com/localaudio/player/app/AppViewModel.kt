@@ -142,6 +142,32 @@ class AppViewModel(
                     }
                 }
         }
+        viewModelScope.launch {
+            combine(
+                libraryRepository.state
+                    .map { it.items }
+                    .distinctUntilChanged(),
+                playbackConnection.state
+                    .map { it.queue }
+                    .distinctUntilChanged(),
+            ) { libraryItems, queue ->
+                val libraryItemsByKey = libraryItems.associateBy { it.key }
+                queue.mapNotNull { queuedItem ->
+                    val libraryItem = libraryItemsByKey[queuedItem.key]
+                    if (libraryItem?.contentHash != null &&
+                        libraryItem.contentHash != queuedItem.contentHash
+                    ) {
+                        queuedItem.key to libraryItem
+                    } else {
+                        null
+                    }
+                }
+            }.collect { replacements ->
+                replacements.forEach { (oldKey, item) ->
+                    playbackConnection.dispatch(PlaybackCommand.ReplaceItem(oldKey, item))
+                }
+            }
+        }
     }
 
     fun onEvent(event: AppEvent) {
