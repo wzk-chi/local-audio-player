@@ -52,13 +52,14 @@ private const val MAIN_PAGE_COUNT = 3
 @Composable
 fun LocalAudioApp(
     state: AppUiState,
+    playback: PlaybackState,
     onEvent: (AppEvent) -> Unit,
 ) {
     val dispatchPlayback: (PlaybackCommand) -> Unit = { command ->
         onEvent(AppEvent.Playback(command))
     }
     val togglePlayback = {
-        dispatchPlayback(if (state.playback.isPlaying) PlaybackCommand.Pause else PlaybackCommand.Play)
+        dispatchPlayback(if (playback.isPlaying) PlaybackCommand.Pause else PlaybackCommand.Play)
     }
     val isSecondarySettings = state.screen == AppScreen.LIBRARY_SETTINGS ||
         state.screen == AppScreen.AUTO_SKIP_SETTINGS ||
@@ -149,7 +150,7 @@ fun LocalAudioApp(
                                     modifier = Modifier.weight(1f),
                                     location = state.homeLocation,
                                     rows = state.homeRows,
-                                    playingKey = state.playback.currentItem?.key,
+                                    playingKey = playback.currentItem?.key,
                                     headerMode = state.settings.homeHeaderMode,
                                     listBottomAligned = state.settings.homeListBottomAligned,
                                     locateRequest = state.locateRequest,
@@ -174,7 +175,7 @@ fun LocalAudioApp(
                                     onAddFolder = { onEvent(AppEvent.AddFolder) },
                                 )
                                 PlaybackControls(
-                                    state = state.playback,
+                                    state = playback,
                                     onPlayPause = togglePlayback,
                                     onNext = { dispatchPlayback(PlaybackCommand.Next) },
                                     onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
@@ -185,7 +186,7 @@ fun LocalAudioApp(
                             }
                             AppScreen.PLAYER -> PlayerScreen(
                                 modifier = Modifier.fillMaxSize(),
-                                state = state.playback,
+                                state = playback,
                                 seekStepMs = state.settings.seekStepMs,
                                 showAlbumCover = state.settings.showAlbumCover,
                                 onPlayPause = togglePlayback,
@@ -200,7 +201,7 @@ fun LocalAudioApp(
                                     onEvent(AppEvent.OpenEqualizer(AppScreen.PLAYER))
                                 },
                                 onOpenDirectorySkip = {
-                                    state.playback.currentItem?.let { item ->
+                                    playback.currentItem?.let { item ->
                                         onEvent(
                                             AppEvent.ShowDialog(
                                                 AppDialog.DirectorySkip(item.folderUri, item.relativePath),
@@ -257,7 +258,7 @@ fun LocalAudioApp(
                                     )
                                 }
                                 PlaybackControls(
-                                    state = state.playback,
+                                    state = playback,
                                     onPlayPause = togglePlayback,
                                     onNext = { dispatchPlayback(PlaybackCommand.Next) },
                                     onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },

@@ -22,10 +22,22 @@ class LoudnessRepository(
     }
     private val pendingHashes = ConcurrentHashMap.newKeySet<String>()
     private val failedSources = ConcurrentHashMap.newKeySet<AnalysisKey>()
-    private val _state = MutableStateFlow(store.readAll())
+    private val _state = MutableStateFlow<List<AudioLoudness>>(emptyList())
     private val _revision = MutableStateFlow(0L)
-    private val resultsByHash = HashMap<String, AudioLoudness>().apply {
-        _state.value.forEach { put(it.contentHash, it) }
+    private val resultsByHash = HashMap<String, AudioLoudness>()
+    private var latestRequest: AudioItem? = null
+    private var analysisWorkerScheduled = false
+
+    init {
+        executor.execute {
+            runCatching { store.pruneUnreferenced() }
+            val saved = runCatching { store.readAll() }.getOrDefault(emptyList())
+            synchronized(this) {
+                saved.forEach { result -> resultsByHash[result.contentHash] = result }
+                _state.value = resultsByHash.values.sortedByDescending { it.analyzedAtMs }
+                _revision.value = nextRevision(_revision.value)
+            }
+        }
     }
 
     val state: StateFlow<List<AudioLoudness>> = _state.asStateFlow()
@@ -45,11 +57,40 @@ class LoudnessRepository(
             source in failedSources ||
             !pendingHashes.add(contentHash)
         ) return
-        executor.execute {
+        latestRequest?.contentHash?.let(pendingHashes::remove)
+        latestRequest = item
+        if (!analysisWorkerScheduled) {
+            analysisWorkerScheduled = true
+            executor.execute(::runQueuedAnalysis)
+        }
+    }
+
+    fun close() {
+        synchronized(this) {
+            latestRequest = null
+            pendingHashes.clear()
+        }
+        executor.shutdownNow()
+    }
+
+    private fun runQueuedAnalysis() {
+        while (true) {
+            val item = synchronized(this) {
+                val next = latestRequest ?: run {
+                    analysisWorkerScheduled = false
+                    return
+                }
+                latestRequest = null
+                next
+            }
+            val contentHash = item.contentHash?.takeIf { it.isNotBlank() } ?: continue
+            val source = AnalysisKey(contentHash = contentHash, uri = item.key)
             try {
-                val measurement = analyzer.analyze(item.uri) ?: run {
+                if (resultFor(contentHash) != null) continue
+                val measurement = analyzer.analyze(item.uri)
+                if (measurement == null) {
                     failedSources.add(source)
-                    return@execute
+                    continue
                 }
                 val result = AudioLoudness(
                     contentHash = contentHash,
@@ -65,6 +106,12 @@ class LoudnessRepository(
                 }
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
+                synchronized(this) {
+                    latestRequest?.contentHash?.let(pendingHashes::remove)
+                    latestRequest = null
+                    analysisWorkerScheduled = false
+                }
+                return
             } catch (_: RuntimeException) {
                 // An unsupported decoder or revoked URI should not affect playback.
                 failedSources.add(source)
@@ -73,10 +120,6 @@ class LoudnessRepository(
                 _revision.value = nextRevision(_revision.value)
             }
         }
-    }
-
-    fun close() {
-        executor.shutdownNow()
     }
 
     private fun nextRevision(current: Long): Long =

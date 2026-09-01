@@ -18,6 +18,10 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -200,6 +204,10 @@ private fun FadeDurationRow(
     enabled: Boolean,
     onDurationChange: (Long) -> Unit,
 ) {
+    var sliderValue by remember(durationMs) { mutableFloatStateOf(durationMs.toFloat()) }
+    val displayedDuration = (sliderValue.toLong() / FADE_DURATION_STEP_MS)
+        .times(FADE_DURATION_STEP_MS)
+        .coerceIn(MIN_FADE_DURATION_MS, MAX_FADE_DURATION_MS)
     Column(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -211,19 +219,15 @@ private fun FadeDurationRow(
                 modifier = Modifier.weight(1f),
             )
             Text(
-                text = stringResource(R.string.settings_milliseconds, durationMs),
+                text = stringResource(R.string.settings_milliseconds, displayedDuration),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
         Slider(
-            value = durationMs.toFloat(),
-            onValueChange = { rawValue ->
-                val stepped = (rawValue.toLong() / FADE_DURATION_STEP_MS) * FADE_DURATION_STEP_MS
-                onDurationChange(
-                    stepped.coerceIn(MIN_FADE_DURATION_MS, MAX_FADE_DURATION_MS),
-                )
-            },
+            value = sliderValue,
+            onValueChange = { sliderValue = it },
+            onValueChangeFinished = { onDurationChange(displayedDuration) },
             valueRange = MIN_FADE_DURATION_MS.toFloat()..MAX_FADE_DURATION_MS.toFloat(),
             steps = ((MAX_FADE_DURATION_MS - MIN_FADE_DURATION_MS) / FADE_DURATION_STEP_MS - 1).toInt(),
             enabled = enabled,

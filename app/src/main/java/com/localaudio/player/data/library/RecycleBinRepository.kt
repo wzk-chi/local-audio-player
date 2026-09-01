@@ -3,44 +3,62 @@ package com.localaudio.player.data.library
 import android.net.Uri
 import android.provider.DocumentsContract
 import com.localaudio.player.data.model.AudioItem
-import com.localaudio.player.data.model.RecycleBinState
 import com.localaudio.player.data.model.RecycleFolder
 import com.localaudio.player.data.model.RecycleItem
+import com.localaudio.player.data.model.RecycleBinState
 import com.localaudio.player.data.scan.ScannedDirectory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.LinkedHashMap
 
 /** Owns soft-delete records and the URI-based blacklist used by scans. */
 class RecycleBinRepository(private val store: RecycleBinStore) {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
-    private val _state = MutableStateFlow(store.readState())
+    private val loadedLatch = CountDownLatch(1)
+    @Volatile
+    private var loaded = false
+    private val _state = MutableStateFlow(RecycleBinState())
     private var blockedUriKeys: Set<String> = emptySet()
     private var blockedDocumentKeys: Set<String> = emptySet()
     private var blockedDirectoryKeys: Set<String> = emptySet()
+    private val identityCache = BoundedCache<String, DocumentIdentity>(URI_CACHE_SIZE)
+    private val documentIdCache = BoundedCache<String, String>(URI_CACHE_SIZE)
+    private var pendingPersistence: RecycleBinState? = null
+    private var persistenceScheduled = false
 
     val state: StateFlow<RecycleBinState> = _state.asStateFlow()
 
     init {
-        rebuildIndexes(_state.value)
+        executor.execute {
+            val saved = runCatching { store.readState() }.getOrDefault(RecycleBinState())
+            _state.value = saved
+            rebuildIndexes(saved)
+            loaded = true
+            loadedLatch.countDown()
+        }
     }
 
     @Synchronized
     fun isUriBlocked(uri: String): Boolean {
-        val identity = documentIdentity(uri)
+        if (!awaitLoaded()) return false
+        val identity = cachedDocumentIdentity(uri)
         return identity.normalizedUri in blockedUriKeys ||
             identity.documentKey?.let { it in blockedDocumentKeys } == true
     }
 
     @Synchronized
     fun isDirectoryBlocked(rootFolderUri: String, documentId: String): Boolean {
+        if (!awaitLoaded()) return false
         return directoryKey(rootFolderUri, documentId) in blockedDirectoryKeys
     }
 
     @Synchronized
     fun entriesFor(keys: Set<String>): Pair<List<RecycleItem>, List<RecycleFolder>> {
+        if (!awaitLoaded()) return emptyList<RecycleItem>() to emptyList()
         val current = _state.value
         val folderKeys = keys.filter { it.startsWith(FOLDER_KEY_PREFIX) }
             .map { it.removePrefix(FOLDER_KEY_PREFIX) }.toSet()
@@ -49,12 +67,12 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
             .map { it.removePrefix(ITEM_KEY_PREFIX) }.toMutableSet()
         val folderUriKeys = folders.mapTo(HashSet()) { normalizeUri(it.uri) }
         val folderDocumentKeys = folders.mapNotNullTo(HashSet()) {
-            documentIdentity(it.uri).documentKey
+            cachedDocumentIdentity(it.uri).documentKey
         }
         val selectedItems = current.items.filter { item ->
             if (item.key in itemKeys) return@filter true
             val deletedByFolderUri = item.deletedByFolderUri ?: return@filter false
-            val identity = documentIdentity(deletedByFolderUri)
+            val identity = cachedDocumentIdentity(deletedByFolderUri)
             identity.normalizedUri in folderUriKeys || identity.documentKey in folderDocumentKeys
         }
         return selectedItems to folders
@@ -62,6 +80,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
 
     @Synchronized
     fun softDeleteItems(items: List<AudioItem>, deletedByFolderUri: String? = null) {
+        if (!awaitLoaded()) return
         val current = _state.value
         val nextItems = replaceSoftDeletedItems(
             existingItems = current.items,
@@ -74,6 +93,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
     /** Updates a deleted directory and all of its audio children in one state/persistence operation. */
     @Synchronized
     fun softDeleteDirectory(items: List<AudioItem>, folder: RecycleFolder) {
+        if (!awaitLoaded()) return
         val current = _state.value
         val nextItems = replaceSoftDeletedItems(
             existingItems = current.items,
@@ -87,6 +107,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
     /** Refreshes deleted directory paths discovered outside the app. */
     @Synchronized
     fun updateScannedDirectories(directories: List<ScannedDirectory>) {
+        if (!awaitLoaded()) return
         if (directories.isEmpty() || _state.value.folders.isEmpty()) return
         val current = _state.value
         val candidates = directories.filter { directory ->
@@ -142,6 +163,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         items: List<AudioItem>,
         rebindRenamedPaths: Boolean = false,
     ): List<AudioItem> {
+        if (!awaitLoaded()) return items
         val current = _state.value
         val nextItems = current.items.toMutableList()
         val visible = ArrayList<AudioItem>(items.size)
@@ -150,7 +172,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         val documentCandidates = HashMap<String, MutableList<Int>>()
         if (!rebindRenamedPaths) {
             nextItems.forEachIndexed { index, recycleItem ->
-                val identity = documentIdentity(recycleItem.uri)
+                val identity = cachedDocumentIdentity(recycleItem.uri)
                 uriCandidates.getOrPut(identity.normalizedUri) { ArrayList() } += index
                 identity.documentKey?.let { key ->
                     documentCandidates.getOrPut(key) { ArrayList() } += index
@@ -162,7 +184,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
             candidates?.firstOrNull { it !in matchedRecycleIndices } ?: -1
 
         items.distinctBy { it.key }.forEach { item ->
-            val identity = documentIdentity(item.uri.toString())
+            val identity = cachedDocumentIdentity(item.uri.toString())
             var existingIndex = if (rebindRenamedPaths) {
                 nextItems.withIndex().firstOrNull { indexedItem ->
                     !matchedRecycleIndices.contains(indexedItem.index) &&
@@ -206,6 +228,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
 
     @Synchronized
     fun restore(keys: Set<String>): RecycleBinState {
+        if (!awaitLoaded()) return _state.value
         val current = _state.value
         val expanded = entriesFor(keys)
         val itemKeys = expanded.first.mapTo(HashSet()) { it.key }
@@ -227,6 +250,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         oldFolderUri: String,
         newFolderUri: String,
     ) {
+        if (!awaitLoaded()) return
         val current = _state.value
         val nextItems = current.items.map { item ->
             val nextPath = if (item.folderUri == rootFolderUri && isInPath(item.relativePath, oldPath)) {
@@ -256,6 +280,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
 
     @Synchronized
     fun updateRootFolderName(rootFolderUri: String, title: String, newFolderUri: String? = null) {
+        if (!awaitLoaded()) return
         val current = _state.value
         val currentRootFolderUri = current.folders.firstOrNull {
             it.rootFolderUri == rootFolderUri && it.relativePath.isEmpty()
@@ -289,6 +314,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
 
     @Synchronized
     fun remove(keys: Set<String>) {
+        if (!awaitLoaded()) return
         val current = _state.value
         val (items, folders) = entriesFor(keys)
         val itemKeys = items.mapTo(HashSet()) { it.key }
@@ -305,7 +331,37 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         if (next == _state.value) return
         _state.value = next
         rebuildIndexes(next)
-        executor.execute { runCatching { store.writeState(next) } }
+        persist(next)
+    }
+
+    private fun persist(state: RecycleBinState) {
+        synchronized(this) {
+            pendingPersistence = state
+            if (persistenceScheduled) return
+            persistenceScheduled = true
+        }
+        executor.execute(::drainPersistence)
+    }
+
+    private fun drainPersistence() {
+        while (true) {
+            val state = synchronized(this) {
+                val next = pendingPersistence ?: run {
+                    persistenceScheduled = false
+                    return
+                }
+                pendingPersistence = null
+                next
+            }
+            runCatching { store.writeState(state) }
+        }
+    }
+
+    fun awaitLoaded(): Boolean {
+        if (loaded) return true
+        return runCatching { loadedLatch.await() }
+            .onFailure { Thread.currentThread().interrupt() }
+            .isSuccess && loaded
     }
 
     private fun rebuildIndexes(state: RecycleBinState) {
@@ -353,7 +409,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         val uriCandidates = HashMap<String, MutableList<Int>>(existingItems.size)
         val documentCandidates = HashMap<String, MutableList<Int>>(existingItems.size)
         existingItems.forEachIndexed { index, recycleItem ->
-            val identity = documentIdentity(recycleItem.uri)
+            val identity = cachedDocumentIdentity(recycleItem.uri)
             uriCandidates.getOrPut(identity.normalizedUri) { ArrayList() } += index
             identity.documentKey?.let { key ->
                 documentCandidates.getOrPut(key) { ArrayList() } += index
@@ -364,7 +420,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         val replacements = ArrayList<RecycleItem>(items.size)
         val now = System.currentTimeMillis()
         items.forEach { item ->
-            val identity = documentIdentity(item.uri.toString())
+            val identity = cachedDocumentIdentity(item.uri.toString())
             val candidates = LinkedHashSet<Int>()
             uriCandidates[identity.normalizedUri]?.let(candidates::addAll)
             identity.documentKey?.let { key ->
@@ -391,7 +447,7 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         }
     }
 
-    private fun normalizeUri(value: String): String = Uri.parse(value).normalizeScheme().toString()
+    private fun normalizeUri(value: String): String = cachedDocumentIdentity(value).normalizedUri
 
     private fun sameRoot(left: String, right: String): Boolean =
         normalizeUri(left) == normalizeUri(right)
@@ -414,17 +470,26 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         )
     }
 
+    private fun cachedDocumentIdentity(value: String): DocumentIdentity =
+        synchronized(identityCache) {
+            identityCache[value] ?: documentIdentity(value).also { identityCache[value] = it }
+        }
+
     private fun directoryKey(rootFolderUri: String, documentId: String): String =
         "${normalizeUri(rootFolderUri)}\u0000$documentId"
 
     private fun documentIdFromUri(value: String): String? = runCatching {
-        DocumentsContract.getDocumentId(Uri.parse(value))
+        synchronized(documentIdCache) {
+            documentIdCache[value] ?: DocumentsContract.getDocumentId(Uri.parse(value)).also {
+                documentIdCache[value] = it
+            }
+        }
     }.getOrNull()
 
     private fun sameDocument(left: String?, right: String): Boolean {
         if (left == null) return false
-        val leftIdentity = documentIdentity(left)
-        val rightIdentity = documentIdentity(right)
+        val leftIdentity = cachedDocumentIdentity(left)
+        val rightIdentity = cachedDocumentIdentity(right)
         return leftIdentity.normalizedUri == rightIdentity.normalizedUri ||
             leftIdentity.documentKey != null && leftIdentity.documentKey == rightIdentity.documentKey
     }
@@ -435,7 +500,17 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
     private fun documentName(value: String): String? =
         documentIdFromUri(value)?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
 
+    private class BoundedCache<K, V>(private val maxSize: Int) : LinkedHashMap<K, V>(
+        maxSize,
+        0.75f,
+        true,
+    ) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>?): Boolean =
+            size > maxSize
+    }
+
     private companion object {
+        const val URI_CACHE_SIZE = 1024
         const val ITEM_KEY_PREFIX = "item:"
         const val FOLDER_KEY_PREFIX = "folder:"
 

@@ -4,6 +4,7 @@ import com.localaudio.player.data.model.DirectorySkipRule
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -11,7 +12,10 @@ class DirectorySkipRepository(
     private val store: DirectorySkipStore,
 ) {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
-    private val _state = MutableStateFlow(store.readRules())
+    private val loadedLatch = CountDownLatch(1)
+    @Volatile
+    private var loaded = false
+    private val _state = MutableStateFlow<List<DirectorySkipRule>>(emptyList())
     @Volatile
     private var index = RuleIndex(
         byFolderAndPath = buildRuleIndex(_state.value),
@@ -24,12 +28,26 @@ class DirectorySkipRepository(
     val revision: Long
         get() = index.revision
 
+    init {
+        executor.execute {
+            val saved = runCatching { store.readRules() }.getOrDefault(emptyList())
+            index = RuleIndex(
+                byFolderAndPath = buildRuleIndex(saved),
+                revision = nextRevision(index.revision),
+            )
+            _state.value = saved
+            loaded = true
+            loadedLatch.countDown()
+        }
+    }
+
     fun ruleFor(folderUri: String, relativePath: String): DirectorySkipRule? {
         val currentIndex = index
         return currentIndex.byFolderAndPath[folderUri]?.get(relativePath)
     }
 
     fun save(folderUri: String, relativePath: String, startSeconds: Long, endSeconds: Long) {
+        if (!awaitLoaded()) return
         val start = startSeconds.coerceAtLeast(0L)
         val end = endSeconds.coerceAtLeast(0L)
         updateRules { rules ->
@@ -51,10 +69,12 @@ class DirectorySkipRepository(
     }
 
     fun removeForFolder(folderUri: String) {
+        if (!awaitLoaded()) return
         updateRules { rules -> rules.filterNot { it.folderUri == folderUri } }
     }
 
     fun updatePath(folderUri: String, oldPath: String, newPath: String) {
+        if (!awaitLoaded()) return
         updateRules { rules ->
             rules.map { rule ->
                 if (rule.folderUri == folderUri && isInPath(rule.relativePath, oldPath)) {
@@ -65,6 +85,7 @@ class DirectorySkipRepository(
     }
 
     fun removePath(folderUri: String, path: String) {
+        if (!awaitLoaded()) return
         updateRules { rules ->
             rules.filterNot { it.folderUri == folderUri && isInPath(it.relativePath, path) }
         }
@@ -81,7 +102,40 @@ class DirectorySkipRepository(
             revision = nextRevision(currentIndex.revision),
         )
         _state.value = next
-        executor.execute { runCatching { store.writeRules(next) } }
+        persist(next)
+    }
+
+    private fun persist(rules: List<DirectorySkipRule>) {
+        synchronized(this) {
+            pendingPersistence = rules
+            if (persistenceScheduled) return
+            persistenceScheduled = true
+        }
+        executor.execute(::drainPersistence)
+    }
+
+    private fun drainPersistence() {
+        while (true) {
+            val rules = synchronized(this) {
+                val next = pendingPersistence ?: run {
+                    persistenceScheduled = false
+                    return
+                }
+                pendingPersistence = null
+                next
+            }
+            runCatching { store.writeRules(rules) }
+        }
+    }
+
+    private var pendingPersistence: List<DirectorySkipRule>? = null
+    private var persistenceScheduled = false
+
+    private fun awaitLoaded(): Boolean {
+        if (loaded) return true
+        return runCatching { loadedLatch.await() }
+            .onFailure { Thread.currentThread().interrupt() }
+            .isSuccess && loaded
     }
 
     private data class RuleIndex(

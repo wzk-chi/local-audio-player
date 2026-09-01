@@ -646,7 +646,7 @@ private fun QueueDialog(
                 state = listState,
                 modifier = Modifier.heightIn(max = 420.dp),
             ) {
-                itemsIndexed(state.queue) { index, item ->
+                itemsIndexed(state.queue, key = { _, item -> item.key }) { index, item ->
                     val active = index == state.currentIndex
                     ListItem(
                         modifier = Modifier

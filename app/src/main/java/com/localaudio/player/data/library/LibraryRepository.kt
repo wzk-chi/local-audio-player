@@ -39,11 +39,16 @@ class LibraryRepository(
     private val scanTokens = HashMap<String, Long>()
     private var nextScanToken = 0L
     private val _state = MutableStateFlow(LibraryState())
+    private var persistenceSequence = 0L
+    private var pendingFullPersistence: PersistenceEntry<LibrarySnapshot>? = null
+    private val pendingFolderItems = LinkedHashMap<String, PersistenceEntry<List<AudioItem>>>()
+    private var persistenceScheduled = false
 
     val state: StateFlow<LibraryState> = _state.asStateFlow()
 
     init {
         executor.execute {
+            recycleBinRepository.awaitLoaded()
             val savedFolders = store.readFolders()
             val cachedItems = recycleBinRepository.filterScannedItems(store.readItems())
             post {
@@ -73,24 +78,22 @@ class LibraryRepository(
         if (_state.value.folders.any { it.uri == uri.toString() }) return
         val provisionalFolder = FolderItem(uri.toString(), fallbackFolderName(uri))
         _state.update { it.copy(folders = it.folders + provisionalFolder) }
-        val savedFolders = _state.value.folders
+        persistLibrary()
         persistenceExecutor.execute {
-            if (runCatching { store.writeFolders(savedFolders) }.isSuccess) {
-                val displayName = queryDisplayName(uri) ?: provisionalFolder.displayName
-                post {
-                    val folder = _state.value.folders.firstOrNull { it.uri == provisionalFolder.uri }
-                        ?: return@post
-                    val updated = folder.copy(displayName = displayName)
-                    if (updated != folder) {
-                        _state.update { state ->
-                            state.copy(folders = state.folders.map { current ->
-                                if (current.uri == updated.uri) updated else current
-                            })
-                        }
-                        persist { store.writeFolders(_state.value.folders) }
+            val displayName = queryDisplayName(uri) ?: provisionalFolder.displayName
+            post {
+                val folder = _state.value.folders.firstOrNull { it.uri == provisionalFolder.uri }
+                    ?: return@post
+                val updated = folder.copy(displayName = displayName)
+                if (updated != folder) {
+                    _state.update { state ->
+                        state.copy(folders = state.folders.map { current ->
+                            if (current.uri == updated.uri) updated else current
+                        })
                     }
-                    startScan(updated)
+                    persistLibrary()
                 }
+                startScan(updated)
             }
         }
     }
@@ -451,7 +454,7 @@ class LibraryRepository(
                         )
                     }
                     jobs.remove(folder.uri)
-                    persist { store.replaceItemsForFolder(folder.uri, visibleResult) }
+                    persistItemsForFolder(folder.uri, visibleResult)
                 }
             } catch (error: Exception) {
                 postCurrent(folder.uri, scanToken) {
@@ -508,10 +511,65 @@ class LibraryRepository(
 
     private fun persistLibrary() {
         val snapshot = _state.value
-        persist {
-            store.writeFolders(snapshot.folders)
-            store.writeItems(snapshot.items)
+        synchronized(this) {
+            pendingFullPersistence = PersistenceEntry(
+                sequence = nextPersistenceSequence(),
+                value = LibrarySnapshot(snapshot.folders, snapshot.items),
+            )
+            schedulePersistenceLocked()
         }
+    }
+
+    private fun persistItemsForFolder(folderUri: String, items: List<AudioItem>) {
+        synchronized(this) {
+            pendingFolderItems[folderUri] = PersistenceEntry(
+                sequence = nextPersistenceSequence(),
+                value = items,
+            )
+            schedulePersistenceLocked()
+        }
+    }
+
+    private fun schedulePersistenceLocked() {
+        if (persistenceScheduled) return
+        persistenceScheduled = true
+        persistenceExecutor.execute(::drainPersistence)
+    }
+
+    private fun drainPersistence() {
+        while (true) {
+            val request = synchronized(this) {
+                if (pendingFullPersistence == null && pendingFolderItems.isEmpty()) {
+                    persistenceScheduled = false
+                    return
+                }
+                val full = pendingFullPersistence
+                pendingFullPersistence = null
+                val folders = pendingFolderItems.toMap()
+                pendingFolderItems.clear()
+                full to folders
+            }
+            request.first?.let { entry ->
+                runCatching {
+                    store.writeFolders(entry.value.folders)
+                    store.writeItems(entry.value.items)
+                }
+            }
+            val fullSequence = request.first?.sequence
+            request.second.entries
+                .asSequence()
+                .filter { (_, entry) -> fullSequence == null || entry.sequence > fullSequence }
+                .sortedBy { (_, entry) -> entry.sequence }
+                .forEach { (folderUri, entry) ->
+                    runCatching { store.replaceItemsForFolder(folderUri, entry.value) }
+                }
+        }
+    }
+
+    private fun nextPersistenceSequence(): Long {
+        val sequence = persistenceSequence
+        persistenceSequence = if (sequence == Long.MAX_VALUE) 0L else sequence + 1L
+        return sequence
     }
 
     private fun queryDisplayName(uri: Uri): String? = runCatching {
@@ -586,15 +644,21 @@ class LibraryRepository(
 
     private fun post(block: () -> Unit) = mainHandler.post(block)
 
-    private fun persist(block: () -> Unit) {
-        persistenceExecutor.execute(block)
-    }
-
     private fun postCurrent(folderUri: String, scanToken: Long, block: () -> Unit) {
         mainHandler.post {
             if (scanTokens[folderUri] == scanToken) block()
         }
     }
+
+    private data class LibrarySnapshot(
+        val folders: List<FolderItem>,
+        val items: List<AudioItem>,
+    )
+
+    private data class PersistenceEntry<T>(
+        val sequence: Long,
+        val value: T,
+    )
 
     private companion object {
         fun isInPath(path: String, parent: String): Boolean =

@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -14,7 +15,10 @@ class AutoSkipRepository(
     private val store: AutoSkipStore,
 ) {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
-    private val _state = MutableStateFlow(store.readSegments())
+    private val loadedLatch = CountDownLatch(1)
+    @Volatile
+    private var loaded = false
+    private val _state = MutableStateFlow<List<AutoSkipSegment>>(emptyList())
     @Volatile
     private var index = SegmentIndex(
         byContentHash = buildSegmentIndex(_state.value),
@@ -27,8 +31,22 @@ class AutoSkipRepository(
     val revision: Long
         get() = index.revision
 
+    init {
+        executor.execute {
+            val saved = runCatching { store.readSegments() }.getOrDefault(emptyList())
+            index = SegmentIndex(
+                byContentHash = buildSegmentIndex(saved),
+                revision = nextRevision(index.revision),
+            )
+            _state.value = saved
+            loaded = true
+            loadedLatch.countDown()
+        }
+    }
+
     @Synchronized
     fun add(item: AudioItem, startMs: Long, endMs: Long): AutoSkipSegment? {
+        if (!awaitLoaded()) return null
         val start = startMs.coerceAtLeast(0L)
         val end = endMs.coerceAtLeast(0L)
         if (end <= start) return null
@@ -51,11 +69,13 @@ class AutoSkipRepository(
 
     @Synchronized
     fun delete(id: String) {
+        if (!awaitLoaded()) return
         updateSegments { segments -> segments.filterNot { it.id == id } }
     }
 
     @Synchronized
     fun update(id: String, startMs: Long, endMs: Long): AutoSkipSegment? {
+        if (!awaitLoaded()) return null
         val start = startMs.coerceAtLeast(0L)
         val end = endMs.coerceAtLeast(0L)
         if (end <= start) return null
@@ -76,6 +96,7 @@ class AutoSkipRepository(
 
     @Synchronized
     fun reconcile(validContentHashes: Set<String>, unresolvedAudioUris: Set<String>) {
+        if (!awaitLoaded()) return
         updateSegments { segments ->
             segments.filterNot { segment ->
                 segment.contentHash !in validContentHashes && segment.audioUri !in unresolvedAudioUris
@@ -86,6 +107,7 @@ class AutoSkipRepository(
     /** Refreshes the display/playback snapshot after a completed media scan. */
     @Synchronized
     fun updateSnapshots(items: List<AudioItem>) {
+        if (!awaitLoaded()) return
         val byUri = items.associateBy { normalizeUri(it.uri.toString()) }
         val byHash = items.filter { !it.contentHash.isNullOrBlank() }
             .groupBy { it.contentHash }
@@ -100,6 +122,7 @@ class AutoSkipRepository(
 
     @Synchronized
     fun updateAudioSnapshot(previousUri: String, item: AudioItem) {
+        if (!awaitLoaded()) return
         updateSegments { segments ->
             segments.map { segment ->
                 if (segment.contentHash == item.contentHash &&
@@ -115,6 +138,7 @@ class AutoSkipRepository(
 
     @Synchronized
     fun updateRootFolderSnapshot(folderUri: String, folderName: String) {
+        if (!awaitLoaded()) return
         updateSegments { segments ->
             segments.map { segment ->
                 if (segment.folderUri == folderUri) {
@@ -126,6 +150,7 @@ class AutoSkipRepository(
 
     @Synchronized
     fun updatePathSnapshot(folderUri: String, oldPath: String, newPath: String) {
+        if (!awaitLoaded()) return
         updateSegments { segments ->
             segments.map { segment ->
                 if (segment.folderUri == folderUri && isInPath(segment.relativePath, oldPath)) {
@@ -149,7 +174,36 @@ class AutoSkipRepository(
     }
 
     private fun persist(segments: List<AutoSkipSegment>) {
-        executor.execute { runCatching { store.writeSegments(segments) } }
+        synchronized(this) {
+            pendingPersistence = segments
+            if (persistenceScheduled) return
+            persistenceScheduled = true
+        }
+        executor.execute(::drainPersistence)
+    }
+
+    private fun drainPersistence() {
+        while (true) {
+            val segments = synchronized(this) {
+                val next = pendingPersistence ?: run {
+                    persistenceScheduled = false
+                    return
+                }
+                pendingPersistence = null
+                next
+            }
+            runCatching { store.writeSegments(segments) }
+        }
+    }
+
+    private var pendingPersistence: List<AutoSkipSegment>? = null
+    private var persistenceScheduled = false
+
+    private fun awaitLoaded(): Boolean {
+        if (loaded) return true
+        return runCatching { loadedLatch.await() }
+            .onFailure { Thread.currentThread().interrupt() }
+            .isSuccess && loaded
     }
 
     private fun AutoSkipSegment.withAudioSnapshot(item: AudioItem) = copy(

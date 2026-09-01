@@ -23,6 +23,21 @@ class LoudnessStore(private val database: AudioDatabase) {
         }
     }.getOrDefault(emptyList())
 
+    fun pruneUnreferenced() {
+        database.writableDatabase.delete(
+            AudioDatabase.TABLE_AUDIO_LOUDNESS,
+            "${AudioDatabase.COLUMN_CONTENT_HASH} NOT IN (" +
+                "SELECT ${AudioDatabase.COLUMN_CONTENT_HASH} " +
+                "FROM ${AudioDatabase.TABLE_AUDIO_ITEMS} " +
+                "WHERE ${AudioDatabase.COLUMN_CONTENT_HASH} IS NOT NULL" +
+                ") AND ${AudioDatabase.COLUMN_CONTENT_HASH} NOT IN (" +
+                "SELECT ${AudioDatabase.COLUMN_CONTENT_HASH} " +
+                "FROM ${AudioDatabase.TABLE_AUTO_SKIP_SEGMENTS}" +
+                ")",
+            null,
+        )
+    }
+
     fun upsert(loudness: AudioLoudness) {
         val values = ContentValues().apply {
             put(AudioDatabase.COLUMN_CONTENT_HASH_ALGORITHM, CONTENT_HASH_ALGORITHM)

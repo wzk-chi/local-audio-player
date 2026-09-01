@@ -5,6 +5,10 @@ import com.localaudio.player.data.model.DirectorySkipRule
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption.ATOMIC_MOVE
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
+import java.nio.file.AtomicMoveNotSupportedException
 
 class DirectorySkipStore(context: Context) {
     private val file = File(context.filesDir, "directory_skip_rules.json")
@@ -19,12 +23,31 @@ class DirectorySkipStore(context: Context) {
     fun writeRules(rules: List<DirectorySkipRule>) {
         val values = JSONArray()
         rules.forEach { values.put(encode(it)) }
-        file.writeText(
-            JSONObject()
-                .put("version", 1)
-                .put("rules", values)
-                .toString(),
-        )
+        val temporaryFile = File(file.parentFile, "${file.name}.tmp")
+        try {
+            temporaryFile.writeText(
+                JSONObject()
+                    .put("version", 1)
+                    .put("rules", values)
+                    .toString(),
+            )
+            try {
+                Files.move(
+                    temporaryFile.toPath(),
+                    file.toPath(),
+                    ATOMIC_MOVE,
+                    REPLACE_EXISTING,
+                )
+            } catch (_: AtomicMoveNotSupportedException) {
+                Files.move(
+                    temporaryFile.toPath(),
+                    file.toPath(),
+                    REPLACE_EXISTING,
+                )
+            }
+        } finally {
+            if (temporaryFile.exists()) temporaryFile.delete()
+        }
     }
 
     private fun encode(rule: DirectorySkipRule): JSONObject = JSONObject()

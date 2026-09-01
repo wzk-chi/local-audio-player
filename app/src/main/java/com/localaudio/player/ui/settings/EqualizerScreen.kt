@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -185,6 +186,8 @@ private fun EqualizerBandSlider(
     gainDb: Int,
     onGainChange: (Int) -> Unit,
 ) {
+    var sliderValue by remember(gainDb) { mutableFloatStateOf(gainDb.toFloat()) }
+    val displayedGain = sliderValue.roundToInt()
     Column(
         modifier = Modifier.padding(vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -199,14 +202,15 @@ private fun EqualizerBandSlider(
                 modifier = Modifier.weight(1f),
             )
             Text(
-                text = gainLabel(gainDb),
+                text = gainLabel(displayedGain),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Slider(
-            value = gainDb.toFloat(),
-            onValueChange = { onGainChange(it.roundToInt()) },
+            value = sliderValue,
+            onValueChange = { sliderValue = it },
+            onValueChangeFinished = { onGainChange(displayedGain) },
             valueRange = EQUALIZER_MIN_GAIN_DB.toFloat()..EQUALIZER_MAX_GAIN_DB.toFloat(),
             steps = EQUALIZER_MAX_GAIN_DB - EQUALIZER_MIN_GAIN_DB - 1,
             modifier = Modifier.fillMaxWidth(),

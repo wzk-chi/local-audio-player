@@ -20,6 +20,7 @@ sealed interface PlaybackCommand {
     data class SeekBy(val deltaMs: Long) : PlaybackCommand
     data class RemoveItems(val keys: Set<String>) : PlaybackCommand
     data class ReplaceItem(val oldKey: String, val item: AudioItem) : PlaybackCommand
+    data class ReplaceItems(val itemsByKey: Map<String, AudioItem>) : PlaybackCommand
     data class SetPlayMode(val repeatMode: Int, val shuffleEnabled: Boolean) : PlaybackCommand
     data class StartTimer(val durationMs: Long) : PlaybackCommand
     data object StopTimer : PlaybackCommand

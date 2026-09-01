@@ -18,12 +18,14 @@ import com.localaudio.player.playback.PlaybackCommand
 import com.localaudio.player.playback.PlaybackConnection
 import com.localaudio.player.playback.PlaybackState
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
@@ -67,7 +69,7 @@ class AppViewModel(
         homeLocation,
     ) { input, location ->
         homeRowsBuilder.rows(input.folders, input.items, location)
-    }
+    }.flowOn(Dispatchers.Default)
 
     private val homeContent = combine(
         libraryRepository.state,
@@ -110,16 +112,26 @@ class AppViewModel(
         content.copy(directorySkipRules = directorySkipRules)
     }
 
-    private val contentState = combine(
+    private val contentStateFlow = combine(
         baseContentState,
         recycleBinRepository.state,
     ) { content, recycleBin ->
         content.copy(recycleBin = recycleBin)
-    }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(
+            stopTimeoutMillis = 0,
+            replayExpirationMillis = 0,
+        ),
+        initialValue = AppUiState(settings = settingsRepository.state.value),
+    )
+
+    val contentState: StateFlow<AppUiState> = contentStateFlow
+    val playbackState: StateFlow<PlaybackState> = playbackConnection.state
 
     val uiState: StateFlow<AppUiState> = combine(
-        contentState,
-        playbackConnection.state,
+        contentStateFlow,
+        playbackState,
     ) { content, playback ->
         content.copy(playback = playback)
     }.stateIn(
@@ -163,9 +175,10 @@ class AppViewModel(
                         null
                     }
                 }
-            }.collect { replacements ->
-                replacements.forEach { (oldKey, item) ->
-                    playbackConnection.dispatch(PlaybackCommand.ReplaceItem(oldKey, item))
+            }.map { it.toMap() }
+                .collect { replacements ->
+                if (replacements.isNotEmpty()) {
+                    playbackConnection.dispatch(PlaybackCommand.ReplaceItems(replacements))
                 }
             }
         }
@@ -346,12 +359,12 @@ class AppViewModel(
     }
 
     private fun updatePlaybackAfterDirectoryRename(location: FolderLocation, newName: String) {
-        playbackConnection.state.value.queue
+        val replacements = playbackConnection.state.value.queue
             .filter { item ->
                 item.folderUri == location.folderUri &&
                     (location.relativePath.isEmpty() || isInPath(item.relativePath, location.relativePath))
             }
-            .forEach { item ->
+            .associate { item ->
                 val updated = if (location.relativePath.isEmpty()) {
                     item.copy(folderName = newName)
                 } else {
@@ -359,8 +372,11 @@ class AppViewModel(
                     val newPath = if (parent.isEmpty()) newName else "$parent/$newName"
                     item.copy(relativePath = replacePath(item.relativePath, location.relativePath, newPath))
                 }
-                playbackConnection.dispatch(PlaybackCommand.ReplaceItem(item.key, updated))
+                item.key to updated
             }
+        if (replacements.isNotEmpty()) {
+            playbackConnection.dispatch(PlaybackCommand.ReplaceItems(replacements))
+        }
     }
 
     private fun playAutoSkipAudio(segmentId: String) {

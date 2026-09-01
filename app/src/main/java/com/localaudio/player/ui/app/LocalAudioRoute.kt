@@ -14,8 +14,9 @@ fun LocalAudioRoute(
     viewModel: AppViewModel,
     onDarkThemeChanged: (Boolean) -> Unit,
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val darkTheme = when (state.settings.themeMode) {
+    val contentState by viewModel.contentState.collectAsStateWithLifecycle()
+    val playbackState by viewModel.playbackState.collectAsStateWithLifecycle()
+    val darkTheme = when (contentState.settings.themeMode) {
         ThemeMode.DARK -> true
         ThemeMode.LIGHT -> false
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -23,7 +24,8 @@ fun LocalAudioRoute(
     LaunchedEffect(darkTheme) { onDarkThemeChanged(darkTheme) }
     LocalAudioTheme(darkTheme = darkTheme) {
         LocalAudioApp(
-            state = state,
+            state = contentState,
+            playback = playbackState,
             onEvent = viewModel::onEvent,
         )
     }

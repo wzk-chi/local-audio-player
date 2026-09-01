@@ -147,6 +147,7 @@ class PlaybackCoordinator(
             is PlaybackCommand.SeekBy -> seekTo(currentPosition() + command.deltaMs)
             is PlaybackCommand.RemoveItems -> removeItems(command.keys)
             is PlaybackCommand.ReplaceItem -> replaceItem(command.oldKey, command.item)
+            is PlaybackCommand.ReplaceItems -> replaceItems(command.itemsByKey)
             is PlaybackCommand.SetPlayMode -> setPlayMode(command.repeatMode, command.shuffleEnabled)
             is PlaybackCommand.StartTimer -> startTimer(command.durationMs)
             PlaybackCommand.StopTimer -> stopTimer()
@@ -370,10 +371,19 @@ class PlaybackCoordinator(
     }
 
     private fun replaceItem(oldKey: String, item: AudioItem) {
-        val oldItem = queue.firstOrNull { it.key == oldKey } ?: return
-        queue = queue.map { if (it.key == oldKey) item else it }
-        if (queue.getOrNull(currentIndex)?.key == item.key) {
-            if (oldItem.uri != item.uri) {
+        replaceItems(mapOf(oldKey to item))
+    }
+
+    private fun replaceItems(itemsByKey: Map<String, AudioItem>) {
+        if (itemsByKey.isEmpty()) return
+        val oldCurrentItem = queue.getOrNull(currentIndex)
+        if (oldCurrentItem == null && queue.none { it.key in itemsByKey }) return
+        val nextQueue = queue.map { itemsByKey[it.key] ?: it }
+        if (nextQueue == queue) return
+        queue = nextQueue
+        val updatedCurrentItem = queue.getOrNull(currentIndex)
+        if (oldCurrentItem != null && updatedCurrentItem != null) {
+            if (oldCurrentItem.uri != updatedCurrentItem.uri) {
                 savedPositionMs = currentPosition()
                 loadCurrent()
             } else {

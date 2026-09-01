@@ -25,9 +25,6 @@ data class ScannedDirectory(
 class MediaScanner(private val context: Context) {
     private val hashCalculator = AudioHashCalculator(context)
     private val detailExecutor: ExecutorService = Executors.newFixedThreadPool(MAX_DETAIL_THREADS)
-    private val metadataRetrievers = object : ThreadLocal<MediaMetadataRetriever>() {
-        override fun initialValue(): MediaMetadataRetriever = MediaMetadataRetriever()
-    }
 
     private companion object {
         const val MAX_DEPTH = 20
@@ -201,12 +198,14 @@ class MediaScanner(private val context: Context) {
     }
 
     private fun readDuration(uri: Uri): Long {
+        val retriever = MediaMetadataRetriever()
         return try {
-            val retriever = metadataRetrievers.get() ?: return 0L
             retriever.setDataSource(context, uri)
             retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
         } catch (_: RuntimeException) {
             0L
+        } finally {
+            runCatching { retriever.release() }
         }
     }
 }
