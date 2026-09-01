@@ -72,16 +72,24 @@ class SettingsRepository(context: Context) {
     }
 
     fun updateEqualizerPreset(value: EqualizerPreset) {
-        val gains = normalizeEqualizerGains(value.defaultGainsDb())
+        val current = _state.value.equalizer
+        val customGains = normalizeEqualizerGains(current.customGainsDb)
+        val gains = if (value == EqualizerPreset.CUSTOM) {
+            customGains
+        } else {
+            normalizeEqualizerGains(value.defaultGainsDb())
+        }
         updateState(
             preferences.edit()
                 .putString(KEY_EQUALIZER_PRESET, value.name)
-                .putString(KEY_EQUALIZER_GAINS, gains.joinToString(",")),
+                .putString(KEY_EQUALIZER_GAINS, gains.joinToString(","))
+                .putString(KEY_EQUALIZER_CUSTOM_GAINS, customGains.joinToString(",")),
         ) {
             it.copy(
                 equalizer = it.equalizer.copy(
                     preset = value,
                     gainsDb = gains,
+                    customGainsDb = customGains,
                 ),
             )
         }
@@ -97,12 +105,14 @@ class SettingsRepository(context: Context) {
         updateState(
             preferences.edit()
                 .putString(KEY_EQUALIZER_PRESET, EqualizerPreset.CUSTOM.name)
-                .putString(KEY_EQUALIZER_GAINS, gains.joinToString(",")),
+                .putString(KEY_EQUALIZER_GAINS, gains.joinToString(","))
+                .putString(KEY_EQUALIZER_CUSTOM_GAINS, gains.joinToString(",")),
         ) {
             it.copy(
                 equalizer = it.equalizer.copy(
                     preset = EqualizerPreset.CUSTOM,
                     gainsDb = gains,
+                    customGainsDb = gains,
                 ),
             )
         }
@@ -226,14 +236,23 @@ class SettingsRepository(context: Context) {
         val preset = preferences.getString(KEY_EQUALIZER_PRESET, null)
             ?.let { value -> runCatching { EqualizerPreset.valueOf(value) }.getOrNull() }
             ?: EqualizerPreset.FLAT
-        val gains = preferences.getString(KEY_EQUALIZER_GAINS, null)
+        val storedGains = preferences.getString(KEY_EQUALIZER_GAINS, null)
             ?.split(',')
             ?.mapNotNull(String::toIntOrNull)
-            ?: preset.defaultGainsDb()
+        val customGains = preferences.getString(KEY_EQUALIZER_CUSTOM_GAINS, null)
+            ?.split(',')
+            ?.mapNotNull(String::toIntOrNull)
+            ?: if (preset == EqualizerPreset.CUSTOM) {
+                storedGains ?: EQUALIZER_FLAT_GAINS_DB
+            } else {
+                EQUALIZER_FLAT_GAINS_DB
+            }
+        val gains = storedGains ?: preset.defaultGainsDb()
         return EqualizerSettings(
             enabled = preferences.getBoolean(KEY_EQUALIZER_ENABLED, false),
             preset = preset,
             gainsDb = normalizeEqualizerGains(gains),
+            customGainsDb = normalizeEqualizerGains(customGains),
         )
     }
 
@@ -270,6 +289,7 @@ class SettingsRepository(context: Context) {
         const val KEY_EQUALIZER_ENABLED = "equalizer_enabled"
         const val KEY_EQUALIZER_PRESET = "equalizer_preset"
         const val KEY_EQUALIZER_GAINS = "equalizer_gains"
+        const val KEY_EQUALIZER_CUSTOM_GAINS = "equalizer_custom_gains"
         const val KEY_HOME_LOCATION = "home_location"
         const val KEY_NOTIFICATION_REQUESTED = "notification_requested"
     }

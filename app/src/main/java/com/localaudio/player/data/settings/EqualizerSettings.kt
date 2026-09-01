@@ -21,6 +21,7 @@ data class EqualizerSettings(
     val enabled: Boolean = false,
     val preset: EqualizerPreset = EqualizerPreset.FLAT,
     val gainsDb: List<Int> = EQUALIZER_FLAT_GAINS_DB,
+    val customGainsDb: List<Int> = EQUALIZER_FLAT_GAINS_DB,
 )
 
 fun EqualizerPreset.defaultGainsDb(): List<Int> = when (this) {

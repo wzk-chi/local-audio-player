@@ -166,7 +166,6 @@ private fun EqualizerPresetSelector(
             onDismissRequest = { expanded = false },
         ) {
             EqualizerPreset.entries
-                .filter { it != EqualizerPreset.CUSTOM }
                 .forEach { option ->
                     DropdownMenuItem(
                         text = { Text(presetLabel(option)) },
