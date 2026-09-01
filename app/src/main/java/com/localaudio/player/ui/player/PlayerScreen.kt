@@ -96,6 +96,7 @@ fun PlayerScreen(
             .padding(horizontal = 20.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        LoudnessDebugInfo(state)
         Spacer(modifier = Modifier.weight(0.25f))
         if (showAlbumCover) {
             CoverPlaceholder(
@@ -292,6 +293,43 @@ fun PlayerScreen(
         }
     }
 }
+
+@Composable
+private fun LoudnessDebugInfo(state: PlaybackState) {
+    val gainLabel = when {
+        !state.loudnessEnabled -> stringResource(R.string.player_loudness_disabled)
+        state.loudnessGainDb != null -> formatGainDb(state.loudnessGainDb)
+        state.loudnessAnalyzing -> stringResource(R.string.player_loudness_analyzing)
+        state.currentItem == null -> stringResource(R.string.player_loudness_unavailable)
+        else -> stringResource(R.string.player_loudness_unanalyzed)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(
+                R.string.player_loudness_debug_offset,
+                formatGainDb(state.loudnessOffsetDb.toFloat()),
+            ),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = stringResource(R.string.player_loudness_debug_gain, gainLabel),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp),
+        )
+    }
+}
+
+private fun formatGainDb(value: Float): String =
+    if (value >= 0f) "+${"%.1f".format(java.util.Locale.US, value)} dB"
+    else "${"%.1f".format(java.util.Locale.US, value)} dB"
 
 @Composable
 private fun PlayModeMenu(

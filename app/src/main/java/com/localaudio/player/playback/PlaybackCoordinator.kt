@@ -3,6 +3,9 @@ package com.localaudio.player.playback
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import com.localaudio.player.data.loudness.LOUDNESS_SMOOTH_DURATION_MS
+import com.localaudio.player.data.loudness.LoudnessRepository
+import com.localaudio.player.data.loudness.gainDb
 import com.localaudio.player.data.model.AudioItem
 import com.localaudio.player.data.settings.FADE_DURATION_STEP_MS
 import com.localaudio.player.data.settings.MAX_FADE_DURATION_MS
@@ -18,6 +21,7 @@ class PlaybackCoordinator(
     private val settingsRepository: SettingsRepository,
     private val autoSkipRepository: AutoSkipRepository,
     private val directorySkipRepository: DirectorySkipRepository,
+    private val loudnessRepository: LoudnessRepository,
     private val playbackStore: PlaybackStore,
     private val queueNavigator: QueueNavigator,
     private val sleepTimer: SleepTimer,
@@ -42,6 +46,11 @@ class PlaybackCoordinator(
     private var outputVolume = 1f
     private var fadeOutStartedAtMs = 0L
     private var fadeOutStartVolume = 1f
+    private var loudnessCurrentGainDb = 0f
+    private var loudnessTargetGainDb = 0f
+    private var loudnessTransitionStartedAtMs: Long? = null
+    private var loudnessTransitionStartDb = 0f
+    private var loudnessTransitionActive = false
     private var pendingTrackSelection: TrackSelection? = null
     private var autoSkipPreview: AutoSkipPreview? = null
     private var cachedSkipRanges: List<SkipRange> = emptyList()
@@ -54,6 +63,7 @@ class PlaybackCoordinator(
     private var cachedSkipPreview: AutoSkipPreview? = null
     private var appliedVolumePlayer: PlatformPlayer? = null
     private var appliedVolume = -1f
+    private var appliedGainDb = Float.NaN
 
     private val tick = object : Runnable {
         override fun run() {
@@ -62,13 +72,15 @@ class PlaybackCoordinator(
             if (pendingTrackSelection == null) {
                 checkAutoSkipPreview()
                 checkAutoSkip()
+                updateLoudnessGain()
                 updateFadeVolume()
             } else {
                 updateFadeOut()
             }
             publishState()
             if (player?.isPlaying() == true || timerState.expireAt > 0L ||
-                timerState.waitingForTrackEnd || pendingTrackSelection != null
+                timerState.waitingForTrackEnd || pendingTrackSelection != null ||
+                loudnessTransitionActive
             ) {
                 scheduleTick()
             }
@@ -89,7 +101,20 @@ class PlaybackCoordinator(
     fun attachPlayer(player: PlatformPlayer) {
         this.player = player
         appliedVolumePlayer = null
+        appliedGainDb = Float.NaN
+        updateLoudnessGain(animate = false)
         publishState()
+    }
+
+    /** Refreshes output gain after settings or a background loudness analysis changes. */
+    fun refresh() {
+        runOnMain {
+            requestLoudnessAnalysis()
+            updateLoudnessGain()
+            updateFadeVolume()
+            if (loudnessTransitionActive) scheduleTick()
+            publishState()
+        }
     }
 
     fun dispatch(command: PlaybackCommand) {
@@ -141,6 +166,7 @@ class PlaybackCoordinator(
         player?.release()
         player = null
         appliedVolumePlayer = null
+        appliedGainDb = Float.NaN
     }
 
     private fun playQueue(items: List<AudioItem>, index: Int) {
@@ -302,9 +328,12 @@ class PlaybackCoordinator(
     private fun loadCurrent() {
         val item = queue.getOrNull(currentIndex) ?: return
         val currentPlayer = player ?: return
+        requestLoudnessAnalysis()
+        updateLoudnessGain(animate = false)
         handledTerminalGeneration = -1L
         pendingSeekMs = savedPositionMs
         appliedVolumePlayer = null
+        appliedGainDb = Float.NaN
         val generation = currentPlayer.load(item.uri)
         currentGeneration = generation
         publishState()
@@ -332,6 +361,9 @@ class PlaybackCoordinator(
     private fun replaceItem(oldKey: String, item: AudioItem) {
         if (queue.none { it.key == oldKey }) return
         queue = queue.map { if (it.key == oldKey) item else it }
+        if (queue.getOrNull(currentIndex)?.key == item.key) {
+            updateLoudnessGain()
+        }
         persistPlayback()
         publishState()
     }
@@ -382,6 +414,7 @@ class PlaybackCoordinator(
         pendingSeekMs = null
         desiredPlaying = selection.shouldPlay
         resetFadeForTrack()
+        resetLoudnessForTrack(queue.getOrNull(currentIndex))
         if (selection.restartAutomaticTimer) startAutomaticTimer()
         loadCurrent()
     }
@@ -544,6 +577,15 @@ class PlaybackCoordinator(
         outputVolume = if (fadeEnabled) 0f else 1f
     }
 
+    private fun resetLoudnessForTrack(item: AudioItem?) {
+        val target = targetLoudnessGainDb(item)
+        loudnessCurrentGainDb = target
+        loudnessTargetGainDb = target
+        loudnessTransitionStartedAtMs = null
+        loudnessTransitionStartDb = target
+        loudnessTransitionActive = false
+    }
+
     private fun restartFadeIn(startImmediately: Boolean) {
         val settings = settingsRepository.state.value
         if (!settings.fadeEnabled) {
@@ -598,6 +640,56 @@ class PlaybackCoordinator(
         return active
     }
 
+    private fun updateLoudnessGain(animate: Boolean = player?.isPlaying() == true): Boolean {
+        val target = targetLoudnessGainDb(queue.getOrNull(currentIndex))
+        if (kotlin.math.abs(target - loudnessTargetGainDb) > GAIN_EPSILON) {
+            loudnessTargetGainDb = target
+            if (animate) {
+                loudnessTransitionStartDb = loudnessCurrentGainDb
+                loudnessTransitionStartedAtMs = SystemClock.uptimeMillis()
+                loudnessTransitionActive = true
+            } else {
+                loudnessCurrentGainDb = target
+                loudnessTransitionStartedAtMs = null
+                loudnessTransitionActive = false
+            }
+        } else if (!animate && loudnessTransitionActive) {
+            loudnessCurrentGainDb = loudnessTargetGainDb
+            loudnessTransitionStartedAtMs = null
+            loudnessTransitionActive = false
+        }
+
+        if (loudnessTransitionActive) {
+            val startedAt = loudnessTransitionStartedAtMs ?: SystemClock.uptimeMillis().also {
+                loudnessTransitionStartedAtMs = it
+            }
+            val elapsed = (SystemClock.uptimeMillis() - startedAt).coerceAtLeast(0L)
+            val progress = (elapsed.toFloat() / LOUDNESS_SMOOTH_DURATION_MS.toFloat())
+                .coerceIn(0f, 1f)
+            loudnessCurrentGainDb = loudnessTransitionStartDb +
+                (loudnessTargetGainDb - loudnessTransitionStartDb) * progress
+            if (progress >= 1f) {
+                loudnessCurrentGainDb = loudnessTargetGainDb
+                loudnessTransitionStartedAtMs = null
+                loudnessTransitionActive = false
+            }
+        }
+        setOutputVolume(player, outputVolume)
+        return loudnessTransitionActive
+    }
+
+    private fun targetLoudnessGainDb(item: AudioItem?): Float {
+        val settings = settingsRepository.state.value
+        if (!settings.loudnessEnabled) return 0f
+        val hash = item?.contentHash?.takeIf { it.isNotBlank() } ?: return 0f
+        return loudnessRepository.resultFor(hash)?.gainDb(settings.loudnessOffsetDb) ?: 0f
+    }
+
+    private fun requestLoudnessAnalysis() {
+        if (!settingsRepository.state.value.loudnessEnabled) return
+        queue.getOrNull(currentIndex)?.let(loudnessRepository::ensureAnalysis)
+    }
+
     private fun startTrackTransition(selection: TrackSelection): Boolean {
         val currentPlayer = player
         if (!settingsRepository.state.value.fadeEnabled ||
@@ -649,12 +741,17 @@ class PlaybackCoordinator(
         outputVolume = normalized
         if (currentPlayer == null || !currentPlayer.isPrepared) {
             appliedVolumePlayer = null
+            appliedGainDb = Float.NaN
             return
         }
-        if (appliedVolumePlayer === currentPlayer && appliedVolume == normalized) return
-        currentPlayer.setVolume(normalized)
+        if (appliedVolumePlayer === currentPlayer &&
+            appliedVolume == normalized &&
+            appliedGainDb == loudnessCurrentGainDb
+        ) return
+        currentPlayer.setGainAndVolume(loudnessCurrentGainDb, normalized)
         appliedVolumePlayer = currentPlayer
         appliedVolume = normalized
+        appliedGainDb = loudnessCurrentGainDb
     }
 
     private fun rescheduleFadeTick() {
@@ -774,7 +871,10 @@ class PlaybackCoordinator(
     private fun scheduleTick() {
         if (!tickScheduled) {
             tickScheduled = true
-            mainHandler.postDelayed(tick, if (fadeTickActive) 50L else 500L)
+            mainHandler.postDelayed(
+                tick,
+                if (fadeTickActive || loudnessTransitionActive) 50L else 500L,
+            )
         }
     }
 
@@ -808,6 +908,8 @@ class PlaybackCoordinator(
 
     private fun publishState() {
         val settings = settingsRepository.state.value
+        val currentItem = queue.getOrNull(currentIndex)
+        val loudnessResult = currentItem?.contentHash?.let(loudnessRepository::resultFor)
         _state.value = PlaybackState(
             queue = queue,
             currentIndex = currentIndex,
@@ -820,6 +922,12 @@ class PlaybackCoordinator(
             activeTimerDurationMs = timerState.durationMs,
             timerRemainingMs = sleepTimer.remainingMs(timerState),
             timerWaitingForEnd = timerState.waitingForTrackEnd,
+            loudnessEnabled = settings.loudnessEnabled,
+            loudnessOffsetDb = settings.loudnessOffsetDb,
+            loudnessGainDb = loudnessResult?.takeIf { settings.loudnessEnabled }
+                ?.gainDb(settings.loudnessOffsetDb),
+            loudnessAnalyzing = settings.loudnessEnabled &&
+                currentItem?.contentHash?.let(loudnessRepository::isAnalysisPending) == true,
         )
     }
 
@@ -852,6 +960,7 @@ class PlaybackCoordinator(
 
     private companion object {
         const val PREVIEW_PADDING_MS = 3_000L
+        const val GAIN_EPSILON = 0.001f
 
         fun subtractSafely(value: Long, amount: Long): Long =
             if (value <= amount) 0L else value - amount

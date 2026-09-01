@@ -498,6 +498,8 @@ class AppViewModel(
             is SettingChange.SetSeekStep -> settingsRepository.updateSeekStepMs(change.valueMs)
             is SettingChange.SetFadeEnabled -> settingsRepository.updateFadeEnabled(change.value)
             is SettingChange.SetFadeDuration -> settingsRepository.updateFadeDurationMs(change.valueMs)
+            is SettingChange.SetLoudnessEnabled -> settingsRepository.updateLoudnessEnabled(change.value)
+            is SettingChange.SetLoudnessOffset -> settingsRepository.updateLoudnessOffsetDb(change.valueDb)
             is SettingChange.AddTimerDuration -> {
                 val settings = settingsRepository.state.value
                 settingsRepository.updateTimerDurationOptions(settings.timerDurationOptionsMs + change.valueMs)

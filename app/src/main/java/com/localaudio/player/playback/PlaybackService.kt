@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import com.localaudio.player.R
 
@@ -50,6 +51,7 @@ class PlaybackService : Service() {
             settingsRepository = container.settingsRepository,
             autoSkipRepository = container.autoSkipRepository,
             directorySkipRepository = container.directorySkipRepository,
+            loudnessRepository = container.loudnessRepository,
             playbackStore = container.playbackStore,
             queueNavigator = QueueNavigator(),
             sleepTimer = SleepTimer(),
@@ -63,6 +65,15 @@ class PlaybackService : Service() {
                 onAudioFocusLost = { coordinator.dispatch(PlaybackCommand.Pause) },
             ),
         )
+        serviceScope.launch {
+            container.settingsRepository.state.collectLatest { coordinator.refresh() }
+        }
+        serviceScope.launch {
+            container.loudnessRepository.state.collectLatest { coordinator.refresh() }
+        }
+        serviceScope.launch {
+            container.loudnessRepository.revision.collectLatest { coordinator.refresh() }
+        }
         createNotificationChannel()
         mediaSession = MediaSession(this, "LocalAudio")
         mediaSession.setCallback(object : MediaSession.Callback() {

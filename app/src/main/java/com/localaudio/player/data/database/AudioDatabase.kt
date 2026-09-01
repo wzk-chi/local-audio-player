@@ -10,6 +10,7 @@ class AudioDatabase(context: Context) :
     override fun onCreate(db: SQLiteDatabase) {
         createAudioItemsTable(db)
         createAutoSkipSegmentsTable(db)
+        createAudioLoudnessTable(db)
         createRecycleItemsTable(db)
         createRecycleFoldersTable(db)
     }
@@ -34,6 +35,9 @@ class AudioDatabase(context: Context) :
         }
         if (oldVersion < VERSION_AUDIO_FOLDER_INDEX) {
             createAudioItemsFolderIndex(db)
+        }
+        if (oldVersion < VERSION_AUDIO_LOUDNESS) {
+            createAudioLoudnessTable(db)
         }
     }
 
@@ -96,6 +100,22 @@ class AudioDatabase(context: Context) :
         )
     }
 
+    private fun createAudioLoudnessTable(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_AUDIO_LOUDNESS (
+                $COLUMN_CONTENT_HASH_ALGORITHM TEXT NOT NULL,
+                $COLUMN_CONTENT_HASH TEXT NOT NULL,
+                $COLUMN_INTEGRATED_LUFS REAL NOT NULL,
+                $COLUMN_PEAK REAL NOT NULL,
+                $COLUMN_ANALYSIS_VERSION INTEGER NOT NULL,
+                $COLUMN_ANALYZED_AT_MS INTEGER NOT NULL,
+                PRIMARY KEY ($COLUMN_CONTENT_HASH_ALGORITHM, $COLUMN_CONTENT_HASH)
+            )
+            """.trimIndent(),
+        )
+    }
+
     private fun createRecycleItemsTable(db: SQLiteDatabase) {
         db.execSQL(
             """
@@ -151,6 +171,12 @@ class AudioDatabase(context: Context) :
         const val COLUMN_END_MS = "end_ms"
         const val COLUMN_MODIFIED_AT_MS = "modified_at_ms"
 
+        const val TABLE_AUDIO_LOUDNESS = "audio_loudness"
+        const val COLUMN_INTEGRATED_LUFS = "integrated_lufs"
+        const val COLUMN_PEAK = "peak"
+        const val COLUMN_ANALYSIS_VERSION = "analysis_version"
+        const val COLUMN_ANALYZED_AT_MS = "analyzed_at_ms"
+
         const val TABLE_RECYCLE_ITEMS = "recycle_items"
         const val COLUMN_DELETED_AT_MS = "deleted_at_ms"
         const val COLUMN_DELETED_BY_FOLDER_URI = "deleted_by_folder_uri"
@@ -159,10 +185,11 @@ class AudioDatabase(context: Context) :
         const val COLUMN_ROOT_FOLDER_URI = "root_folder_uri"
 
         private const val DATABASE_NAME = "library.db"
-        private const val DATABASE_VERSION = 7
+        private const val DATABASE_VERSION = 8
         private const val VERSION_AUTO_SKIP_TABLE = 2
         private const val VERSION_RECYCLE_SCOPE = 5
         private const val VERSION_AUDIO_METADATA = 6
         private const val VERSION_AUDIO_FOLDER_INDEX = 7
+        private const val VERSION_AUDIO_LOUDNESS = 8
     }
 }

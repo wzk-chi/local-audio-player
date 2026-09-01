@@ -6,6 +6,9 @@ import com.localaudio.player.data.library.LibraryStore
 import com.localaudio.player.data.library.LibraryRepository
 import com.localaudio.player.data.library.RecycleBinRepository
 import com.localaudio.player.data.library.RecycleBinStore
+import com.localaudio.player.data.loudness.LoudnessAnalyzer
+import com.localaudio.player.data.loudness.LoudnessRepository
+import com.localaudio.player.data.loudness.LoudnessStore
 import com.localaudio.player.data.scan.MediaScanner
 import com.localaudio.player.data.settings.SettingsRepository
 import com.localaudio.player.data.skip.AutoSkipRepository
@@ -22,6 +25,10 @@ class AppContainer(context: Context) {
     val autoSkipRepository = AutoSkipRepository(AutoSkipStore(database))
     val directorySkipRepository = DirectorySkipRepository(DirectorySkipStore(context))
     val recycleBinRepository = RecycleBinRepository(RecycleBinStore(database))
+    val loudnessRepository = LoudnessRepository(
+        store = LoudnessStore(database),
+        analyzer = LoudnessAnalyzer(context),
+    )
     private val libraryStore = LibraryStore(context, database)
     val libraryRepository = LibraryRepository(
         context = context,

@@ -14,6 +14,8 @@ const val MIN_FADE_DURATION_MS = 100L
 const val MAX_FADE_DURATION_MS = 3_000L
 const val FADE_DURATION_STEP_MS = 100L
 
+const val DEFAULT_LOUDNESS_OFFSET_DB = 0
+
 val DEFAULT_TIMER_DURATIONS_MS = listOf(
     30 * 60_000L,
     60 * 60_000L,
@@ -35,5 +37,7 @@ data class AppSettings(
     val shuffleEnabled: Boolean = false,
     val fadeEnabled: Boolean = true,
     val fadeDurationMs: Long = 1_000L,
+    val loudnessEnabled: Boolean = true,
+    val loudnessOffsetDb: Int = DEFAULT_LOUDNESS_OFFSET_DB,
     val savedHomeLocation: FolderLocation? = null,
 )
