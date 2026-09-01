@@ -966,8 +966,6 @@ class PlaybackCoordinator(
 
     private fun publishState() {
         val settings = settingsRepository.state.value
-        val currentItem = queue.getOrNull(currentIndex)
-        val loudnessResult = currentItem?.contentHash?.let(loudnessRepository::resultFor)
         _state.value = PlaybackState(
             queue = queue,
             currentIndex = currentIndex,
@@ -980,11 +978,6 @@ class PlaybackCoordinator(
             activeTimerDurationMs = timerState.durationMs,
             timerRemainingMs = sleepTimer.remainingMs(timerState),
             timerWaitingForEnd = timerState.waitingForTrackEnd,
-            loudnessEnabled = settings.loudnessEnabled,
-            loudnessGainDb = loudnessResult?.takeIf { settings.loudnessEnabled }
-                ?.gainDb(),
-            loudnessAnalyzing = settings.loudnessEnabled &&
-                currentItem?.contentHash?.let(loudnessRepository::isAnalysisPending) == true,
         )
     }
 

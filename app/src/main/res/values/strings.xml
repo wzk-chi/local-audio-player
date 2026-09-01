@@ -19,11 +19,6 @@
     <string name="player_play">播放</string>
     <string name="player_next">下一曲</string>
     <string name="player_seek_forward">快进</string>
-    <string name="player_loudness_debug_gain">最终增益 %1$s</string>
-    <string name="player_loudness_disabled">已关闭</string>
-    <string name="player_loudness_analyzing">分析中</string>
-    <string name="player_loudness_unavailable">—</string>
-    <string name="player_loudness_unanalyzed">未分析</string>
     <string name="player_menu">菜单</string>
     <string name="player_auto_skip_mark">跳过标记</string>
     <string name="player_auto_skip_finish">结束标记</string>
