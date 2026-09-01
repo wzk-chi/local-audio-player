@@ -10,7 +10,7 @@ const val MIN_LOUDNESS_GAIN_DB = -12f
 const val MAX_LOUDNESS_GAIN_DB = 6f
 const val LOUDNESS_PEAK_CEILING_DB = -1f
 const val LOUDNESS_ANALYSIS_VERSION = 1
-const val LOUDNESS_SMOOTH_DURATION_MS = 5_000L
+const val LOUDNESS_SMOOTH_DURATION_MS = 2_000L
 
 /** Loudness measurement cached by content hash. Values are linear peak and LUFS. */
 data class AudioLoudness(
