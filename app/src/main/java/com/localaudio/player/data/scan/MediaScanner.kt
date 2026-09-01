@@ -163,22 +163,24 @@ class MediaScanner(private val context: Context) {
     }
 
     private fun enrichItem(item: AudioItem, cached: AudioItem?): AudioItem {
-        if (cached != null && hasSameFileMetadata(item, cached) && !cached.contentHash.isNullOrBlank()) {
+        val metadataMatches = cached != null && hasSameFileMetadata(item, cached)
+        if (metadataMatches && !cached?.contentHash.isNullOrBlank()) {
             return item.copy(
                 durationMs = cached.durationMs,
                 contentHash = cached.contentHash,
             )
         }
         checkInterrupted()
-        val durationMs = if (cached != null && hasSameFileMetadata(item, cached)) {
-            cached.durationMs
+        val contentHash = hashCalculator.calculate(item.uri)
+        checkInterrupted()
+        val durationMs = if (metadataMatches || cached?.contentHash == contentHash) {
+            cached?.durationMs ?: readDuration(item.uri)
         } else {
             readDuration(item.uri)
         }
-        checkInterrupted()
         return item.copy(
             durationMs = durationMs,
-            contentHash = hashCalculator.calculate(item.uri),
+            contentHash = contentHash,
         )
     }
 
