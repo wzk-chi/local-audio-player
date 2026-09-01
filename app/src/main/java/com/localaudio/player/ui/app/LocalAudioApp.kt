@@ -215,9 +215,6 @@ fun LocalAudioApp(
                                         onSetLoudnessEnabled = {
                                             onEvent(AppEvent.UpdateSetting(SettingChange.SetLoudnessEnabled(it)))
                                         },
-                                        onSetLoudnessOffset = {
-                                            onEvent(AppEvent.UpdateSetting(SettingChange.SetLoudnessOffset(it)))
-                                        },
                                         onSetTimerEnabled = {
                                             onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerEnabled(it)))
                                         },

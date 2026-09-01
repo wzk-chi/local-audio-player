@@ -7,8 +7,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
-import com.localaudio.player.data.loudness.MAX_LOUDNESS_OFFSET_DB
-import com.localaudio.player.data.loudness.MIN_LOUDNESS_OFFSET_DB
 
 /** Owns typed settings state and its SharedPreferences persistence. */
 class SettingsRepository(context: Context) {
@@ -66,11 +64,6 @@ class SettingsRepository(context: Context) {
 
     fun updateLoudnessEnabled(value: Boolean) =
         updateBoolean(KEY_LOUDNESS_ENABLED, value) { it.copy(loudnessEnabled = value) }
-
-    fun updateLoudnessOffsetDb(value: Int) {
-        val normalized = value.coerceIn(MIN_LOUDNESS_OFFSET_DB, MAX_LOUDNESS_OFFSET_DB)
-        updateInt(KEY_LOUDNESS_OFFSET_DB, normalized) { it.copy(loudnessOffsetDb = normalized) }
-    }
 
     fun updateTimerDurationOptions(values: List<Long>) {
         val options = values.filter { it > 0L }.distinct().sorted()
@@ -181,8 +174,6 @@ class SettingsRepository(context: Context) {
                 .coerceIn(MIN_FADE_DURATION_MS, MAX_FADE_DURATION_MS)
                 .let { (it / FADE_DURATION_STEP_MS) * FADE_DURATION_STEP_MS },
             loudnessEnabled = preferences.getBoolean(KEY_LOUDNESS_ENABLED, true),
-            loudnessOffsetDb = preferences.getInt(KEY_LOUDNESS_OFFSET_DB, DEFAULT_LOUDNESS_OFFSET_DB)
-                .coerceIn(MIN_LOUDNESS_OFFSET_DB, MAX_LOUDNESS_OFFSET_DB),
             savedHomeLocation = decodeLocation(preferences.getString(KEY_HOME_LOCATION, null)),
         )
     }
@@ -217,7 +208,6 @@ class SettingsRepository(context: Context) {
         const val KEY_FADE_ENABLED = "fade_enabled"
         const val KEY_FADE_DURATION = "fade_duration"
         const val KEY_LOUDNESS_ENABLED = "loudness_enabled"
-        const val KEY_LOUDNESS_OFFSET_DB = "loudness_offset_db"
         const val KEY_HOME_LOCATION = "home_location"
         const val KEY_NOTIFICATION_REQUESTED = "notification_requested"
     }

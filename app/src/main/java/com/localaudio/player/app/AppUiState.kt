@@ -73,7 +73,6 @@ sealed interface SettingChange {
     data class SetFadeEnabled(val value: Boolean) : SettingChange
     data class SetFadeDuration(val valueMs: Long) : SettingChange
     data class SetLoudnessEnabled(val value: Boolean) : SettingChange
-    data class SetLoudnessOffset(val valueDb: Int) : SettingChange
     data class AddTimerDuration(val valueMs: Long) : SettingChange
     data class DeleteTimerDuration(val valueMs: Long) : SettingChange
 }

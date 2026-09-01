@@ -21,15 +21,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 import com.localaudio.player.R
 import com.localaudio.player.data.settings.AppSettings
 import com.localaudio.player.data.settings.FADE_DURATION_STEP_MS
 import com.localaudio.player.data.settings.MAX_FADE_DURATION_MS
 import com.localaudio.player.data.settings.MIN_FADE_DURATION_MS
-import com.localaudio.player.data.loudness.MAX_LOUDNESS_OFFSET_DB
-import com.localaudio.player.data.loudness.MIN_LOUDNESS_OFFSET_DB
-import com.localaudio.player.data.loudness.LOUDNESS_OFFSET_STEP_DB
 import com.localaudio.player.data.settings.HomeHeaderMode
 import com.localaudio.player.data.settings.ThemeMode
 import com.localaudio.player.ui.components.SettingChoiceRow
@@ -51,7 +47,6 @@ fun SettingsScreen(
     onSetFadeEnabled: (Boolean) -> Unit,
     onSetFadeDuration: (Long) -> Unit,
     onSetLoudnessEnabled: (Boolean) -> Unit,
-    onSetLoudnessOffset: (Int) -> Unit,
     onSetTimerEnabled: (Boolean) -> Unit,
     onSetWaitForCurrentEnd: (Boolean) -> Unit,
     onSeekStepClick: () -> Unit,
@@ -123,11 +118,6 @@ fun SettingsScreen(
                         title = stringResource(R.string.settings_loudness),
                         checked = settings.loudnessEnabled,
                         onCheckedChange = onSetLoudnessEnabled,
-                    )
-                    LoudnessOffsetRow(
-                        offsetDb = settings.loudnessOffsetDb,
-                        enabled = settings.loudnessEnabled,
-                        onOffsetChange = onSetLoudnessOffset,
                     )
                 }
             }
@@ -231,42 +221,6 @@ private fun FadeDurationRow(
 }
 
 @Composable
-private fun LoudnessOffsetRow(
-    offsetDb: Int,
-    enabled: Boolean,
-    onOffsetChange: (Int) -> Unit,
-) {
-    Column(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = stringResource(R.string.settings_loudness_offset),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = loudnessOffsetLabel(offsetDb),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        Slider(
-            value = offsetDb.toFloat(),
-            onValueChange = { rawValue ->
-                val stepped = (rawValue / LOUDNESS_OFFSET_STEP_DB).roundToInt() * LOUDNESS_OFFSET_STEP_DB
-                onOffsetChange(stepped.coerceIn(MIN_LOUDNESS_OFFSET_DB, MAX_LOUDNESS_OFFSET_DB))
-            },
-            valueRange = MIN_LOUDNESS_OFFSET_DB.toFloat()..MAX_LOUDNESS_OFFSET_DB.toFloat(),
-            steps = (MAX_LOUDNESS_OFFSET_DB - MIN_LOUDNESS_OFFSET_DB) / LOUDNESS_OFFSET_STEP_DB - 1,
-            enabled = enabled,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
-}
-
-@Composable
 private fun SettingsSection(
     title: String,
     content: @Composable ColumnScope.() -> Unit,
@@ -311,6 +265,3 @@ private fun headerLabel(mode: HomeHeaderMode): String = when (mode) {
     HomeHeaderMode.AUTO -> stringResource(R.string.header_auto)
     else -> stringResource(R.string.header_fixed)
 }
-
-private fun loudnessOffsetLabel(offsetDb: Int): String =
-    if (offsetDb > 0) "+$offsetDb dB" else "$offsetDb dB"

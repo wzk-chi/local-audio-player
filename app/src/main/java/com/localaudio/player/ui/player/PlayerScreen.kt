@@ -311,18 +311,9 @@ private fun LoudnessDebugInfo(state: PlaybackState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = stringResource(
-                R.string.player_loudness_debug_offset,
-                formatGainDb(state.loudnessOffsetDb.toFloat()),
-            ),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
             text = stringResource(R.string.player_loudness_debug_gain, gainLabel),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 16.dp),
         )
     }
 }

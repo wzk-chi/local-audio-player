@@ -684,7 +684,7 @@ class PlaybackCoordinator(
         val settings = settingsRepository.state.value
         if (!settings.loudnessEnabled) return 0f
         val hash = item?.contentHash?.takeIf { it.isNotBlank() } ?: return 0f
-        return loudnessRepository.resultFor(hash)?.gainDb(settings.loudnessOffsetDb) ?: 0f
+        return loudnessRepository.resultFor(hash)?.gainDb() ?: 0f
     }
 
     private fun requestLoudnessAnalysis() {
@@ -927,9 +927,8 @@ class PlaybackCoordinator(
             timerRemainingMs = sleepTimer.remainingMs(timerState),
             timerWaitingForEnd = timerState.waitingForTrackEnd,
             loudnessEnabled = settings.loudnessEnabled,
-            loudnessOffsetDb = settings.loudnessOffsetDb,
             loudnessGainDb = loudnessResult?.takeIf { settings.loudnessEnabled }
-                ?.gainDb(settings.loudnessOffsetDb),
+                ?.gainDb(),
             loudnessAnalyzing = settings.loudnessEnabled &&
                 currentItem?.contentHash?.let(loudnessRepository::isAnalysisPending) == true,
         )

@@ -19,7 +19,6 @@
     <string name="player_play">播放</string>
     <string name="player_next">下一曲</string>
     <string name="player_seek_forward">快进</string>
-    <string name="player_loudness_debug_offset">响度偏移 %1$s</string>
     <string name="player_loudness_debug_gain">最终增益 %1$s</string>
     <string name="player_loudness_disabled">已关闭</string>
     <string name="player_loudness_analyzing">分析中</string>
@@ -56,7 +55,6 @@
     <string name="settings_fade">淡入淡出</string>
     <string name="settings_fade_duration">效果时长</string>
     <string name="settings_loudness">音量均衡</string>
-    <string name="settings_loudness_offset">响度偏移量</string>
     <string name="settings_milliseconds">%1$d 毫秒</string>
     <string name="settings_seconds">%1$d 秒</string>
     <string name="duration_hours">%1$d 小时</string>
