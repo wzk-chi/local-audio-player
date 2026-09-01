@@ -124,9 +124,10 @@ fun PlaybackProgressSlider(
             sliderState.positionMs = it * max
         },
         onValueChangeFinished = {
-            if (seeking) {
+            if (sliderState.seeking) {
+                val targetPositionMs = sliderState.positionMs.toLong()
                 sliderState.seeking = false
-                onSeekTo(sliderValue.toLong())
+                onSeekTo(targetPositionMs)
             }
         },
         enabled = state.currentItem != null,

@@ -287,7 +287,7 @@ fun LocalAudioApp(
             }
         }
 
-        AppDialogs(state = state, onEvent = onEvent)
+        AppDialogs(state = state, playback = playback, onEvent = onEvent)
     }
 }
 

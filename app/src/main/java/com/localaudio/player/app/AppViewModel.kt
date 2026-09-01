@@ -129,20 +129,6 @@ class AppViewModel(
     val contentState: StateFlow<AppUiState> = contentStateFlow
     val playbackState: StateFlow<PlaybackState> = playbackConnection.state
 
-    val uiState: StateFlow<AppUiState> = combine(
-        contentStateFlow,
-        playbackState,
-    ) { content, playback ->
-        content.copy(playback = playback)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(
-            stopTimeoutMillis = 0,
-            replayExpirationMillis = 0,
-        ),
-        initialValue = AppUiState(settings = settingsRepository.state.value),
-    )
-
     init {
         playbackConnection.connect()
         viewModelScope.launch {

@@ -65,12 +65,13 @@ import com.localaudio.player.ui.util.durationLabel
 @Composable
 internal fun AppDialogs(
     state: AppUiState,
+    playback: PlaybackState,
     onEvent: (AppEvent) -> Unit,
 ) {
     val dialog = state.dialog
     when (val current = dialog) {
         AppDialog.Queue -> QueueDialog(
-            state = state.playback,
+            state = playback,
             onSelect = {
                 onEvent(AppEvent.Playback(PlaybackCommand.JumpToItem(it)))
                 onEvent(AppEvent.DismissDialog)
@@ -78,7 +79,7 @@ internal fun AppDialogs(
             onDismiss = { onEvent(AppEvent.DismissDialog) },
         )
         AppDialog.Mode -> ModeDialog(
-            state = state.playback,
+            state = playback,
             onSelect = { repeatMode, shuffleEnabled ->
                 onEvent(
                     AppEvent.Playback(
@@ -167,7 +168,7 @@ internal fun AppDialogs(
             )
         }
         AppDialog.Timer -> TimerDialog(
-            state = state.playback,
+            state = playback,
             settings = state.settings,
             onSetEnabled = { onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerEnabled(it))) },
             onSetWaitForEnd = { onEvent(AppEvent.UpdateSetting(SettingChange.SetWaitForCurrentEnd(it))) },

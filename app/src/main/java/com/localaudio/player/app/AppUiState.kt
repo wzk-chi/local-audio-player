@@ -12,7 +12,6 @@ import com.localaudio.player.data.settings.EqualizerPreset
 import com.localaudio.player.data.settings.HomeHeaderMode
 import com.localaudio.player.data.settings.ThemeMode
 import com.localaudio.player.playback.PlaybackCommand
-import com.localaudio.player.playback.PlaybackState
 
 enum class AppScreen {
     HOME,
@@ -62,7 +61,6 @@ data class AppUiState(
     val directorySkipRules: List<DirectorySkipRule> = emptyList(),
     val recycleBin: RecycleBinState = RecycleBinState(),
     val activeAutoSkipMark: ActiveAutoSkipMark? = null,
-    val playback: PlaybackState = PlaybackState(),
 )
 
 data class ActiveAutoSkipMark(
