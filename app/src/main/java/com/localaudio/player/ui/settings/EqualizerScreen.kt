@@ -186,8 +186,8 @@ private fun EqualizerBandSlider(
     gainDb: Int,
     onGainChange: (Int) -> Unit,
 ) {
-    var sliderValue by remember(gainDb) { mutableFloatStateOf(gainDb.toFloat()) }
-    val displayedGain = sliderValue.roundToInt()
+    val sliderState = remember(gainDb) { mutableFloatStateOf(gainDb.toFloat()) }
+    val displayedGain = sliderState.floatValue.roundToInt()
     Column(
         modifier = Modifier.padding(vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -208,9 +208,9 @@ private fun EqualizerBandSlider(
             )
         }
         Slider(
-            value = sliderValue,
-            onValueChange = { sliderValue = it },
-            onValueChangeFinished = { onGainChange(displayedGain) },
+            value = sliderState.floatValue,
+            onValueChange = { sliderState.floatValue = it },
+            onValueChangeFinished = { onGainChange(sliderState.floatValue.roundToInt()) },
             valueRange = EQUALIZER_MIN_GAIN_DB.toFloat()..EQUALIZER_MAX_GAIN_DB.toFloat(),
             steps = EQUALIZER_MAX_GAIN_DB - EQUALIZER_MIN_GAIN_DB - 1,
             modifier = Modifier.fillMaxWidth(),
