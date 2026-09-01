@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -69,6 +70,7 @@ fun LocalAudioApp(
         initialPage = mainPageFor(state.screen),
         pageCount = { MAIN_PAGE_COUNT },
     )
+    val saveableStateHolder = rememberSaveableStateHolder()
     val latestScreen by rememberUpdatedState(state.screen)
 
     LaunchedEffect(state.screen, pagerState) {
@@ -96,6 +98,7 @@ fun LocalAudioApp(
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f)) {
                 if (isSecondarySettings) {
+                    saveableStateHolder.SaveableStateProvider(state.screen.name) {
                     when (state.screen) {
                         AppScreen.LIBRARY_SETTINGS -> LibrarySettingsScreen(
                             folders = state.library.folders,
@@ -139,12 +142,15 @@ fun LocalAudioApp(
                         )
                         else -> error("Unexpected secondary screen: ${state.screen}")
                     }
+                    }
                 } else {
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.fillMaxSize(),
                     ) { page ->
-                        when (screenForMainPage(page)) {
+                        val pageScreen = screenForMainPage(page)
+                        saveableStateHolder.SaveableStateProvider(pageScreen.name) {
+                        when (pageScreen) {
                             AppScreen.HOME -> Column(modifier = Modifier.fillMaxSize()) {
                                 HomeScreen(
                                     modifier = Modifier.weight(1f),
@@ -276,6 +282,7 @@ fun LocalAudioApp(
                             AppScreen.EQUALIZER_SETTINGS -> {
                                 error("Secondary settings is outside the main pager")
                             }
+                        }
                         }
                     }
                 }
