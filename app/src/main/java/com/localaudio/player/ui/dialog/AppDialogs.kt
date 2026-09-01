@@ -50,6 +50,7 @@ import com.localaudio.player.app.AppEvent
 import com.localaudio.player.app.AppUiState
 import com.localaudio.player.app.HomeActionTarget
 import com.localaudio.player.app.SettingChange
+import com.localaudio.player.data.model.AudioItem
 import com.localaudio.player.data.settings.AppSettings
 import com.localaudio.player.data.settings.HomeHeaderMode
 import com.localaudio.player.data.settings.REPEAT_ALL
@@ -110,16 +111,20 @@ internal fun AppDialogs(
             onDismiss = { onEvent(AppEvent.DismissDialog) },
         )
         is AppDialog.DirectorySkip -> {
-            val directoryItems = state.library.items.filter {
-                it.folderUri == current.folderUri && it.relativePath == current.relativePath
-            }
+            val directoryItems = rememberDirectoryItems(
+                items = state.library.items,
+                folderUri = current.folderUri,
+                relativePath = current.relativePath,
+            )
             val directoryLabel = directoryItems.firstOrNull()?.let { item ->
                 if (current.relativePath.isEmpty()) item.folderName else "${item.folderName}/${current.relativePath}"
             } ?: current.relativePath.ifEmpty { current.folderUri }
             DirectorySkipDialog(
-                rule = state.directorySkipRules.firstOrNull {
-                    it.folderUri == current.folderUri && it.relativePath == current.relativePath
-                },
+                rule = rememberDirectorySkipRule(
+                    rules = state.directorySkipRules,
+                    folderUri = current.folderUri,
+                    relativePath = current.relativePath,
+                ),
                 directoryLabel = directoryLabel,
                 audioCount = directoryItems.size,
                 onSave = { startSeconds, endSeconds ->
@@ -137,7 +142,7 @@ internal fun AppDialogs(
             )
         }
         is AppDialog.AutoSkipEditor -> {
-            val item = state.library.items.firstOrNull { it.key == current.audioKey }
+            val item = rememberAudioItem(state.library.items, current.audioKey)
             AutoSkipEditorDialog(
                 title = item?.title ?: current.audioKey,
                 segmentId = current.segmentId,
@@ -245,6 +250,61 @@ internal fun AppDialogs(
         )
         null -> Unit
     }
+}
+
+private class DirectoryItemsCache {
+    var sourceItems: List<AudioItem>? = null
+    var value: List<AudioItem> = emptyList()
+}
+
+@Composable
+private fun rememberDirectoryItems(
+    items: List<AudioItem>,
+    folderUri: String,
+    relativePath: String,
+): List<AudioItem> {
+    val cache = remember(folderUri, relativePath) { DirectoryItemsCache() }
+    if (cache.sourceItems !== items) {
+        cache.sourceItems = items
+        cache.value = items.filter {
+            it.folderUri == folderUri && it.relativePath == relativePath
+        }
+    }
+    return cache.value
+}
+
+private class AudioItemCache {
+    var sourceItems: List<AudioItem>? = null
+    var byKey: Map<String, AudioItem> = emptyMap()
+}
+
+@Composable
+private fun rememberAudioItem(items: List<AudioItem>, key: String): AudioItem? {
+    val cache = remember { AudioItemCache() }
+    if (cache.sourceItems !== items) {
+        cache.sourceItems = items
+        cache.byKey = items.associateBy { it.key }
+    }
+    return cache.byKey[key]
+}
+
+private class DirectorySkipRuleCache {
+    var sourceRules: List<DirectorySkipRule>? = null
+    var byLocation: Map<Pair<String, String>, DirectorySkipRule> = emptyMap()
+}
+
+@Composable
+private fun rememberDirectorySkipRule(
+    rules: List<DirectorySkipRule>,
+    folderUri: String,
+    relativePath: String,
+): DirectorySkipRule? {
+    val cache = remember { DirectorySkipRuleCache() }
+    if (cache.sourceRules !== rules) {
+        cache.sourceRules = rules
+        cache.byLocation = rules.associateBy { it.folderUri to it.relativePath }
+    }
+    return cache.byLocation[folderUri to relativePath]
 }
 
 @Composable
@@ -355,19 +415,7 @@ private fun AutoSkipEditorDialog(
     var preciseEditor by remember { mutableStateOf<AutoSkipTimeField?>(null) }
     val start = editedStartMs
     val end = editedEndMs
-    val validationMessage = when {
-        end <= start -> stringResource(
-            R.string.auto_skip_invalid_end,
-            start / 60_000L,
-            (start / 1_000L % 60L).toInt(),
-        )
-        durationMs > 0L && end > durationMs -> stringResource(
-            R.string.auto_skip_duration_exceeded,
-            durationMs / 60_000L,
-            (durationMs / 1_000L % 60L).toInt(),
-        )
-        else -> null
-    }
+    val validationMessage = autoSkipRangeValidationMessage(start, end, durationMs)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.auto_skip_editor_title)) },
@@ -523,20 +571,12 @@ private fun AutoSkipPreciseTimeDialog(
     } else {
         val start = if (field == AutoSkipTimeField.START) parsedValueMs else otherValueMs
         val end = if (field == AutoSkipTimeField.END) parsedValueMs else otherValueMs
-        when {
-            start < 0L || end < 0L -> stringResource(R.string.auto_skip_invalid_time)
-            end <= start -> stringResource(
-                R.string.auto_skip_invalid_end,
-                start / 60_000L,
-                (start / 1_000L % 60L).toInt(),
-            )
-            durationMs > 0L && end > durationMs -> stringResource(
-                R.string.auto_skip_duration_exceeded,
-                durationMs / 60_000L,
-                (durationMs / 1_000L % 60L).toInt(),
-            )
-            else -> null
-        }
+        autoSkipRangeValidationMessage(
+            startMs = start,
+            endMs = end,
+            durationMs = durationMs,
+            checkNonNegative = true,
+        )
     }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -588,6 +628,28 @@ private fun AutoSkipPreciseTimeDialog(
             }
         },
     )
+}
+
+@Composable
+private fun autoSkipRangeValidationMessage(
+    startMs: Long,
+    endMs: Long,
+    durationMs: Long,
+    checkNonNegative: Boolean = false,
+): String? = when {
+    checkNonNegative && (startMs < 0L || endMs < 0L) ->
+        stringResource(R.string.auto_skip_invalid_time)
+    endMs <= startMs -> stringResource(
+        R.string.auto_skip_invalid_end,
+        startMs / 60_000L,
+        (startMs / 1_000L % 60L).toInt(),
+    )
+    durationMs > 0L && endMs > durationMs -> stringResource(
+        R.string.auto_skip_duration_exceeded,
+        durationMs / 60_000L,
+        (durationMs / 1_000L % 60L).toInt(),
+    )
+    else -> null
 }
 
 private const val AUTO_SKIP_ADJUST_STEP_MS = 100L
@@ -710,6 +772,33 @@ private fun ModeDialog(
 }
 
 @Composable
+private fun SelectableRadioListItem(
+    selected: Boolean,
+    onClick: () -> Unit,
+    headlineContent: @Composable () -> Unit,
+    trailingContent: (@Composable () -> Unit)? = null,
+) {
+    ListItem(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(
+                selected = selected,
+                role = Role.RadioButton,
+                onClick = onClick,
+            ),
+        leadingContent = {
+            RadioButton(
+                selected = selected,
+                onClick = null,
+            )
+        },
+        headlineContent = headlineContent,
+        trailingContent = trailingContent,
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
+}
+
+@Composable
 private fun DirectorySkipDialog(
     rule: DirectorySkipRule?,
     directoryLabel: String,
@@ -815,22 +904,10 @@ private fun TimerDialog(
                 )
                 settings.timerDurationOptionsMs.forEach { duration ->
                     val selected = state.timerActive && duration == state.activeTimerDurationMs
-                    ListItem(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = selected,
-                                role = Role.RadioButton,
-                                onClick = { onSelectDuration(duration) },
-                            ),
-                        leadingContent = {
-                            RadioButton(
-                                selected = selected,
-                                onClick = null,
-                            )
-                        },
+                    SelectableRadioListItem(
+                        selected = selected,
+                        onClick = { onSelectDuration(duration) },
                         headlineContent = { Text(durationLabel(duration)) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }
             }
@@ -859,22 +936,10 @@ private fun <T> ChoiceDialog(
             Column {
                 options.forEach { option ->
                     val isSelected = selected == option.value
-                    ListItem(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = isSelected,
-                                role = Role.RadioButton,
-                                onClick = { onSelect(option.value) },
-                            ),
-                        leadingContent = {
-                            RadioButton(
-                                selected = isSelected,
-                                onClick = null,
-                            )
-                        },
+                    SelectableRadioListItem(
+                        selected = isSelected,
+                        onClick = { onSelect(option.value) },
                         headlineContent = { Text(option.label) },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }
             }
@@ -930,20 +995,9 @@ private fun TimerDurationDialog(
             Column {
                 settings.timerDurationOptionsMs.forEach { duration ->
                     val selected = duration == settings.timerDurationMs
-                    ListItem(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = selected,
-                                role = Role.RadioButton,
-                                onClick = { onSelect(duration) },
-                            ),
-                        leadingContent = {
-                            RadioButton(
-                                selected = selected,
-                                onClick = null,
-                            )
-                        },
+                    SelectableRadioListItem(
+                        selected = selected,
+                        onClick = { onSelect(duration) },
                         headlineContent = { Text(durationLabel(duration)) },
                         trailingContent = {
                             IconButton(
@@ -956,7 +1010,6 @@ private fun TimerDurationDialog(
                                 )
                             }
                         },
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }
                 TextButton(
