@@ -92,28 +92,40 @@ fun PlaybackBar(
     }
 }
 
+internal class PlaybackSliderState(initialPositionMs: Long) {
+    var positionMs by mutableFloatStateOf(initialPositionMs.toFloat())
+    var seeking by mutableStateOf(false)
+}
+
+@Composable
+internal fun rememberPlaybackSliderState(state: PlaybackState): PlaybackSliderState {
+    val currentItemKey = state.currentItem?.key
+    val sliderState = remember(currentItemKey) { PlaybackSliderState(state.positionMs) }
+    LaunchedEffect(state.positionMs, sliderState.seeking) {
+        if (!sliderState.seeking) sliderState.positionMs = state.positionMs.toFloat()
+    }
+    return sliderState
+}
+
 @Composable
 fun PlaybackProgressSlider(
     state: PlaybackState,
     onSeekTo: (Long) -> Unit,
 ) {
-    val currentItemKey = state.currentItem?.key
-    var sliderValue by remember(currentItemKey) { mutableFloatStateOf(state.positionMs.toFloat()) }
-    var seeking by remember(currentItemKey) { mutableStateOf(false) }
-    LaunchedEffect(state.positionMs, seeking) {
-        if (!seeking) sliderValue = state.positionMs.toFloat()
-    }
+    val sliderState = rememberPlaybackSliderState(state)
+    val sliderValue = sliderState.positionMs
+    val seeking = sliderState.seeking
     val max = state.durationMs.coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toFloat()
 
     WavyPlayerSlider(
         value = (sliderValue / max).coerceIn(0f, 1f),
         onValueChange = {
-            seeking = true
-            sliderValue = it * max
+            sliderState.seeking = true
+            sliderState.positionMs = it * max
         },
         onValueChangeFinished = {
             if (seeking) {
-                seeking = false
+                sliderState.seeking = false
                 onSeekTo(sliderValue.toLong())
             }
         },

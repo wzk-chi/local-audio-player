@@ -35,7 +35,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -84,12 +83,9 @@ fun PlayerScreen(
     onFinishAutoSkipMark: () -> Unit,
     onCancelAutoSkipMark: () -> Unit,
 ) {
-    val currentItemKey = state.currentItem?.key
-    var sliderValue by remember(currentItemKey) { mutableFloatStateOf(state.positionMs.toFloat()) }
-    var seeking by remember(currentItemKey) { mutableStateOf(false) }
-    LaunchedEffect(state.positionMs, seeking) {
-        if (!seeking) sliderValue = state.positionMs.toFloat()
-    }
+    val sliderState = rememberPlaybackSliderState(state)
+    val sliderValue = sliderState.positionMs
+    val seeking = sliderState.seeking
     val max = state.durationMs.coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toFloat()
     Column(
         modifier = modifier
@@ -142,10 +138,13 @@ fun PlayerScreen(
         ) {
             WavyPlayerSlider(
                 value = (sliderValue / max).coerceIn(0f, 1f),
-                onValueChange = { seeking = true; sliderValue = it * max },
+                onValueChange = {
+                    sliderState.seeking = true
+                    sliderState.positionMs = it * max
+                },
                 onValueChangeFinished = {
                     if (seeking) {
-                        seeking = false
+                        sliderState.seeking = false
                         onSeekTo(sliderValue.toLong())
                     }
                 },
