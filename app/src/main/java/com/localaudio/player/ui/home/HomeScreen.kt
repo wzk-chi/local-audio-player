@@ -84,6 +84,7 @@ fun HomeScreen(
     playingKey: String?,
     headerMode: HomeHeaderMode,
     listBottomAligned: Boolean,
+    locateRequest: Int,
     onBack: () -> Unit,
     onLocateCurrent: () -> Unit,
     onDirectoryClick: (FolderLocation) -> Unit,
@@ -95,7 +96,6 @@ fun HomeScreen(
     val listState = rememberLazyListState()
     var headerVisible by remember { mutableStateOf(headerMode != HomeHeaderMode.HIDDEN) }
     var previousIndex by remember { mutableIntStateOf(0) }
-    var locateRequest by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(headerMode) {
         headerVisible = headerMode != HomeHeaderMode.HIDDEN
@@ -129,7 +129,6 @@ fun HomeScreen(
                 playingKey = playingKey,
                 onBack = onBack,
                 onLocateCurrent = {
-                    locateRequest += 1
                     onLocateCurrent()
                 },
             )

@@ -152,6 +152,7 @@ fun LocalAudioApp(
                                     playingKey = state.playback.currentItem?.key,
                                     headerMode = state.settings.homeHeaderMode,
                                     listBottomAligned = state.settings.homeListBottomAligned,
+                                    locateRequest = state.locateRequest,
                                     onBack = { onEvent(AppEvent.Back) },
                                     onLocateCurrent = { onEvent(AppEvent.LocateCurrent) },
                                     onDirectoryClick = { onEvent(AppEvent.OpenDirectory(it)) },
@@ -178,6 +179,7 @@ fun LocalAudioApp(
                                     onNext = { dispatchPlayback(PlaybackCommand.Next) },
                                     onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
                                     onOpenPlayer = { onEvent(AppEvent.SelectScreen(AppScreen.PLAYER)) },
+                                    onLocateCurrent = { onEvent(AppEvent.LocateCurrent) },
                                     onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
                                 )
                             }
@@ -260,6 +262,10 @@ fun LocalAudioApp(
                                     onNext = { dispatchPlayback(PlaybackCommand.Next) },
                                     onPrevious = { dispatchPlayback(PlaybackCommand.Previous) },
                                     onOpenPlayer = { onEvent(AppEvent.SelectScreen(AppScreen.PLAYER)) },
+                                    onLocateCurrent = {
+                                        onEvent(AppEvent.SelectScreen(AppScreen.HOME))
+                                        onEvent(AppEvent.LocateCurrent)
+                                    },
                                     onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
                                 )
                             }
@@ -291,6 +297,7 @@ private fun PlaybackControls(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onOpenPlayer: () -> Unit,
+    onLocateCurrent: () -> Unit,
     onSeekTo: (Long) -> Unit,
 ) {
     PlaybackBar(
@@ -299,6 +306,7 @@ private fun PlaybackControls(
         onNext = onNext,
         onPrevious = onPrevious,
         onOpenPlayer = onOpenPlayer,
+        onLocateCurrent = onLocateCurrent,
     )
     PlaybackProgressSlider(
         state = state,

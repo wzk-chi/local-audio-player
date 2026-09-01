@@ -23,10 +23,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
@@ -39,6 +42,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.localaudio.player.R
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -51,6 +57,7 @@ internal fun SwipeableTrackLabel(
     textColor: Color,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
     textAlign: TextAlign = TextAlign.Start,
     maxLines: Int = 2,
     fontWeight: FontWeight? = null,
@@ -60,11 +67,14 @@ internal fun SwipeableTrackLabel(
     val animationScope = rememberCoroutineScope()
     val settleOffset = remember { Animatable(0f) }
     val latestOnClick = rememberUpdatedState(onClick)
+    val latestOnLongClick = rememberUpdatedState(onLongClick)
     val latestOnNext = rememberUpdatedState(onNext)
     val latestOnPrevious = rememberUpdatedState(onPrevious)
     val latestTitle = rememberUpdatedState(title)
+    val hapticFeedback = LocalHapticFeedback.current
     val previousLabel = stringResource(R.string.player_previous)
     val nextLabel = stringResource(R.string.player_next)
+    val locateLabel = stringResource(R.string.home_locate_current)
     var displayedTitle by remember { mutableStateOf(title) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
     var contentWidth by remember { mutableFloatStateOf(0f) }
@@ -72,6 +82,7 @@ internal fun SwipeableTrackLabel(
     val latestSettling = rememberUpdatedState(settling)
     val dragThreshold = with(density) { 56.dp.toPx() }
     val touchSlop = with(density) { 8.dp.toPx() }
+    val longPressTimeoutMillis = LocalViewConfiguration.current.longPressTimeoutMillis
     val maxOffset = contentWidth.coerceAtLeast(180f)
 
     LaunchedEffect(title, settling) {
@@ -98,9 +109,17 @@ internal fun SwipeableTrackLabel(
                         latestOnNext.value()
                         true
                     },
+                ) + listOfNotNull(
+                    latestOnLongClick.value?.let {
+                        CustomAccessibilityAction(label = locateLabel) {
+                            latestOnLongClick.value?.invoke()
+                            true
+                        }
+                    },
                 )
             }
-            .pointerInput(maxOffset) {
+            .pointerInput(maxOffset, longPressTimeoutMillis) {
+                val gestureScope = CoroutineScope(currentCoroutineContext())
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     if (latestSettling.value) {
@@ -108,19 +127,43 @@ internal fun SwipeableTrackLabel(
                         return@awaitEachGesture
                     }
                     var totalDrag = 0f
+                    var totalVerticalDrag = 0f
                     var dragging = false
+                    var moved = false
+                    var longPressed = false
+                    val longPressJob = latestOnLongClick.value?.let {
+                        gestureScope.launch {
+                            delay(longPressTimeoutMillis)
+                            if (!moved && !dragging) {
+                                longPressed = true
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                latestOnLongClick.value?.invoke()
+                            }
+                        }
+                    }
                     while (true) {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                        val delta = change.positionChange().x
-                        totalDrag += delta
-                        if (!dragging && abs(totalDrag) > touchSlop) dragging = true
+                        if (longPressed) {
+                            change.consume()
+                            if (!change.pressed) break
+                            continue
+                        }
+                        val delta = change.positionChange()
+                        totalDrag += delta.x
+                        totalVerticalDrag += delta.y
+                        if (!moved && maxOf(abs(totalDrag), abs(totalVerticalDrag)) > touchSlop) {
+                            moved = true
+                            longPressJob?.cancel()
+                            dragging = abs(totalDrag) > abs(totalVerticalDrag)
+                        }
                         if (dragging) {
                             change.consume()
-                            dragOffset = (dragOffset + delta).coerceIn(-maxOffset, maxOffset)
+                            dragOffset = (dragOffset + delta.x).coerceIn(-maxOffset, maxOffset)
                         }
                         if (!change.pressed) break
                     }
+                    longPressJob?.cancel()
                     if (dragging) {
                         val direction = when {
                             dragOffset <= -dragThreshold -> -1
@@ -158,7 +201,7 @@ internal fun SwipeableTrackLabel(
                                 settling = false
                             }
                         }
-                    } else {
+                    } else if (!longPressed && !moved) {
                         latestOnClick.value?.invoke()
                     }
                 }

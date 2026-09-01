@@ -55,6 +55,7 @@ data class AppUiState(
     val dialog: AppDialog? = null,
     val homeLocation: FolderLocation? = null,
     val homeRows: List<HomeRow> = emptyList(),
+    val locateRequest: Int = 0,
     val library: LibraryState = LibraryState(),
     val settings: AppSettings = AppSettings(),
     val autoSkipSegments: List<AutoSkipSegment> = emptyList(),

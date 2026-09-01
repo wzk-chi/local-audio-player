@@ -39,6 +39,7 @@ fun PlaybackBar(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onOpenPlayer: () -> Unit,
+    onLocateCurrent: () -> Unit,
 ) {
     Surface(
         shape = RoundedCornerShape(20.dp),
@@ -62,6 +63,7 @@ fun PlaybackBar(
                     .weight(1f)
                     .height(48.dp),
                 onClick = onOpenPlayer,
+                onLongClick = if (state.currentItem != null) onLocateCurrent else null,
                 fontWeight = FontWeight.Medium,
             )
             Spacer(modifier = Modifier.width(8.dp))

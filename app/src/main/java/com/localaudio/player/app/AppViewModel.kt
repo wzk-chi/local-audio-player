@@ -82,7 +82,7 @@ class AppViewModel(
     }
 
     private val visibleNavigation = navigation
-        .map { VisibleNavigation(it.screen, it.dialog) }
+        .map { VisibleNavigation(it.screen, it.dialog, it.locateRequest) }
         .distinctUntilChanged()
 
     private val baseContentState = combine(
@@ -98,6 +98,7 @@ class AppViewModel(
                 dialog = currentNavigation.dialog,
                 homeLocation = home.location,
                 homeRows = home.rows,
+                locateRequest = currentNavigation.locateRequest,
                 library = home.library,
                 settings = settings,
                 autoSkipSegments = autoSkipSegments,
@@ -272,6 +273,7 @@ class AppViewModel(
                     name = name,
                 ),
             )
+            navigation.update { it.copy(locateRequest = it.locateRequest + 1) }
         }
     }
 
@@ -573,12 +575,14 @@ class AppViewModel(
         val screen: AppScreen = AppScreen.HOME,
         val dialog: AppDialog? = null,
         val homeLocation: FolderLocation? = null,
+        val locateRequest: Int = 0,
         val equalizerReturnScreen: AppScreen = AppScreen.SETTINGS,
     )
 
     private data class VisibleNavigation(
         val screen: AppScreen,
         val dialog: AppDialog?,
+        val locateRequest: Int,
     )
 
     private data class HomeContent(
