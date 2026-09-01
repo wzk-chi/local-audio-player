@@ -36,5 +36,6 @@ data class AppSettings(
     val fadeEnabled: Boolean = true,
     val fadeDurationMs: Long = 1_000L,
     val loudnessEnabled: Boolean = true,
+    val equalizer: EqualizerSettings = EqualizerSettings(),
     val savedHomeLocation: FolderLocation? = null,
 )

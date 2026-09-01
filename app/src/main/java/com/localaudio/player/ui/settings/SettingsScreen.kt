@@ -23,6 +23,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.localaudio.player.R
 import com.localaudio.player.data.settings.AppSettings
+import com.localaudio.player.data.settings.EqualizerPreset
 import com.localaudio.player.data.settings.FADE_DURATION_STEP_MS
 import com.localaudio.player.data.settings.MAX_FADE_DURATION_MS
 import com.localaudio.player.data.settings.MIN_FADE_DURATION_MS
@@ -47,6 +48,7 @@ fun SettingsScreen(
     onSetFadeEnabled: (Boolean) -> Unit,
     onSetFadeDuration: (Long) -> Unit,
     onSetLoudnessEnabled: (Boolean) -> Unit,
+    onOpenEqualizer: () -> Unit,
     onSetTimerEnabled: (Boolean) -> Unit,
     onSetWaitForCurrentEnd: (Boolean) -> Unit,
     onSeekStepClick: () -> Unit,
@@ -118,6 +120,16 @@ fun SettingsScreen(
                         title = stringResource(R.string.settings_loudness),
                         checked = settings.loudnessEnabled,
                         onCheckedChange = onSetLoudnessEnabled,
+                    )
+                    SettingsDivider()
+                    SettingChoiceRow(
+                        title = stringResource(R.string.settings_equalizer),
+                        value = if (settings.equalizer.enabled) {
+                            equalizerPresetLabel(settings.equalizer.preset)
+                        } else {
+                            stringResource(R.string.settings_equalizer_off)
+                        },
+                        onClick = onOpenEqualizer,
                     )
                 }
             }
@@ -264,4 +276,15 @@ private fun headerLabel(mode: HomeHeaderMode): String = when (mode) {
     HomeHeaderMode.HIDDEN -> stringResource(R.string.header_hidden)
     HomeHeaderMode.AUTO -> stringResource(R.string.header_auto)
     else -> stringResource(R.string.header_fixed)
+}
+
+@Composable
+private fun equalizerPresetLabel(preset: EqualizerPreset): String = when (preset) {
+    EqualizerPreset.FLAT -> stringResource(R.string.equalizer_preset_flat)
+    EqualizerPreset.VOCAL -> stringResource(R.string.equalizer_preset_vocal)
+    EqualizerPreset.BASS -> stringResource(R.string.equalizer_preset_bass)
+    EqualizerPreset.POP -> stringResource(R.string.equalizer_preset_pop)
+    EqualizerPreset.ROCK -> stringResource(R.string.equalizer_preset_rock)
+    EqualizerPreset.CLASSICAL -> stringResource(R.string.equalizer_preset_classical)
+    EqualizerPreset.CUSTOM -> stringResource(R.string.equalizer_preset_custom)
 }

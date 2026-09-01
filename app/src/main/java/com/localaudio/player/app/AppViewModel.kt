@@ -173,6 +173,7 @@ class AppViewModel(
     fun onEvent(event: AppEvent) {
         when (event) {
             is AppEvent.SelectScreen -> navigateTo(event.screen)
+            is AppEvent.OpenEqualizer -> openEqualizer(event.returnScreen)
             AppEvent.Back -> goBack()
             AppEvent.LocateCurrent -> locateCurrent()
             is AppEvent.OpenDirectory -> updateHomeLocation(event.location)
@@ -226,6 +227,7 @@ class AppViewModel(
             AppScreen.LIBRARY_SETTINGS -> navigateTo(AppScreen.SETTINGS)
             AppScreen.AUTO_SKIP_SETTINGS -> navigateTo(AppScreen.SETTINGS)
             AppScreen.RECYCLE_BIN -> navigateTo(AppScreen.SETTINGS)
+            AppScreen.EQUALIZER_SETTINGS -> navigateTo(navigation.value.equalizerReturnScreen)
             AppScreen.PLAYER, AppScreen.SETTINGS -> navigateTo(AppScreen.HOME)
             AppScreen.HOME -> navigation.value.homeLocation?.let { updateHomeLocation(it.parent()) }
         }
@@ -236,6 +238,22 @@ class AppViewModel(
             activeAutoSkipMark.value = null
         }
         navigation.update { it.copy(screen = screen) }
+    }
+
+    private fun openEqualizer(returnScreen: AppScreen) {
+        val safeReturnScreen = when (returnScreen) {
+            AppScreen.PLAYER, AppScreen.SETTINGS -> returnScreen
+            else -> AppScreen.SETTINGS
+        }
+        if (navigation.value.screen == AppScreen.PLAYER) {
+            activeAutoSkipMark.value = null
+        }
+        navigation.update {
+            it.copy(
+                screen = AppScreen.EQUALIZER_SETTINGS,
+                equalizerReturnScreen = safeReturnScreen,
+            )
+        }
     }
 
     private fun updateHomeLocation(location: FolderLocation?) {
@@ -525,6 +543,12 @@ class AppViewModel(
             is SettingChange.SetFadeEnabled -> settingsRepository.updateFadeEnabled(change.value)
             is SettingChange.SetFadeDuration -> settingsRepository.updateFadeDurationMs(change.valueMs)
             is SettingChange.SetLoudnessEnabled -> settingsRepository.updateLoudnessEnabled(change.value)
+            is SettingChange.SetEqualizerEnabled -> settingsRepository.updateEqualizerEnabled(change.value)
+            is SettingChange.SetEqualizerPreset -> settingsRepository.updateEqualizerPreset(change.value)
+            is SettingChange.SetEqualizerBandGain -> settingsRepository.updateEqualizerBandGain(
+                index = change.index,
+                value = change.valueDb,
+            )
             is SettingChange.AddTimerDuration -> {
                 val settings = settingsRepository.state.value
                 settingsRepository.updateTimerDurationOptions(settings.timerDurationOptionsMs + change.valueMs)
@@ -549,6 +573,7 @@ class AppViewModel(
         val screen: AppScreen = AppScreen.HOME,
         val dialog: AppDialog? = null,
         val homeLocation: FolderLocation? = null,
+        val equalizerReturnScreen: AppScreen = AppScreen.SETTINGS,
     )
 
     private data class VisibleNavigation(

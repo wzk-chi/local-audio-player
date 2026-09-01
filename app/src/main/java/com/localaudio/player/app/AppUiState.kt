@@ -8,12 +8,21 @@ import com.localaudio.player.data.model.DirectorySkipRule
 import com.localaudio.player.data.model.FolderLocation
 import com.localaudio.player.data.model.RecycleBinState
 import com.localaudio.player.data.settings.AppSettings
+import com.localaudio.player.data.settings.EqualizerPreset
 import com.localaudio.player.data.settings.HomeHeaderMode
 import com.localaudio.player.data.settings.ThemeMode
 import com.localaudio.player.playback.PlaybackCommand
 import com.localaudio.player.playback.PlaybackState
 
-enum class AppScreen { HOME, PLAYER, SETTINGS, LIBRARY_SETTINGS, AUTO_SKIP_SETTINGS, RECYCLE_BIN }
+enum class AppScreen {
+    HOME,
+    PLAYER,
+    SETTINGS,
+    LIBRARY_SETTINGS,
+    AUTO_SKIP_SETTINGS,
+    RECYCLE_BIN,
+    EQUALIZER_SETTINGS,
+}
 
 sealed interface HomeActionTarget {
     data class Audio(val item: AudioItem) : HomeActionTarget
@@ -73,12 +82,16 @@ sealed interface SettingChange {
     data class SetFadeEnabled(val value: Boolean) : SettingChange
     data class SetFadeDuration(val valueMs: Long) : SettingChange
     data class SetLoudnessEnabled(val value: Boolean) : SettingChange
+    data class SetEqualizerEnabled(val value: Boolean) : SettingChange
+    data class SetEqualizerPreset(val value: EqualizerPreset) : SettingChange
+    data class SetEqualizerBandGain(val index: Int, val valueDb: Int) : SettingChange
     data class AddTimerDuration(val valueMs: Long) : SettingChange
     data class DeleteTimerDuration(val valueMs: Long) : SettingChange
 }
 
 sealed interface AppEvent {
     data class SelectScreen(val screen: AppScreen) : AppEvent
+    data class OpenEqualizer(val returnScreen: AppScreen) : AppEvent
     data object Back : AppEvent
     data object LocateCurrent : AppEvent
     data class OpenDirectory(val location: FolderLocation) : AppEvent

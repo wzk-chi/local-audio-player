@@ -77,6 +77,7 @@ fun PlayerScreen(
     onOpenQueue: () -> Unit,
     onOpenTimer: () -> Unit,
     onOpenMode: () -> Unit,
+    onOpenEqualizer: () -> Unit,
     onOpenDirectorySkip: () -> Unit,
     isAutoSkipMarking: Boolean,
     onStartAutoSkipMark: () -> Unit,
@@ -260,6 +261,10 @@ fun PlayerScreen(
                         modeMenuExpanded = false
                         onOpenMode()
                     },
+                    onOpenEqualizer = {
+                        modeMenuExpanded = false
+                        onOpenEqualizer()
+                    },
                     onOpenDirectorySkip = {
                         modeMenuExpanded = false
                         onOpenDirectorySkip()
@@ -329,6 +334,7 @@ private fun PlayModeMenu(
     onDismiss: () -> Unit,
     onOpenQueue: () -> Unit,
     onOpenMode: () -> Unit,
+    onOpenEqualizer: () -> Unit,
     onOpenDirectorySkip: () -> Unit,
 ) {
     DropdownMenu(
@@ -342,6 +348,10 @@ private fun PlayModeMenu(
         DropdownMenuItem(
             text = { Text(stringResource(R.string.dialog_play_mode)) },
             onClick = onOpenMode,
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.settings_equalizer)) },
+            onClick = onOpenEqualizer,
         )
         DropdownMenuItem(
             text = { Text(stringResource(R.string.player_skip_boundaries)) },

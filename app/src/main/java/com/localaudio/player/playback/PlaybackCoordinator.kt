@@ -8,6 +8,7 @@ import com.localaudio.player.data.loudness.LoudnessRepository
 import com.localaudio.player.data.loudness.gainDb
 import com.localaudio.player.data.model.AudioItem
 import com.localaudio.player.data.settings.FADE_DURATION_STEP_MS
+import com.localaudio.player.data.settings.EqualizerSettings
 import com.localaudio.player.data.settings.MAX_FADE_DURATION_MS
 import com.localaudio.player.data.settings.MIN_FADE_DURATION_MS
 import com.localaudio.player.data.settings.SettingsRepository
@@ -64,6 +65,7 @@ class PlaybackCoordinator(
     private var appliedVolumePlayer: PlatformPlayer? = null
     private var appliedVolume = -1f
     private var appliedGainDb = Float.NaN
+    private var appliedEqualizer: EqualizerSettings? = null
 
     private val tick = object : Runnable {
         override fun run() {
@@ -102,6 +104,7 @@ class PlaybackCoordinator(
         this.player = player
         appliedVolumePlayer = null
         appliedGainDb = Float.NaN
+        appliedEqualizer = null
         updateLoudnessGain(animate = false)
         publishState()
     }
@@ -167,6 +170,7 @@ class PlaybackCoordinator(
         player = null
         appliedVolumePlayer = null
         appliedGainDb = Float.NaN
+        appliedEqualizer = null
     }
 
     private fun playQueue(items: List<AudioItem>, index: Int) {
@@ -335,6 +339,7 @@ class PlaybackCoordinator(
         pendingSeekMs = savedPositionMs
         appliedVolumePlayer = null
         appliedGainDb = Float.NaN
+        appliedEqualizer = null
         val generation = currentPlayer.load(item.uri)
         currentGeneration = generation
         publishState()
@@ -746,16 +751,24 @@ class PlaybackCoordinator(
         if (currentPlayer == null || !currentPlayer.isPrepared) {
             appliedVolumePlayer = null
             appliedGainDb = Float.NaN
+            appliedEqualizer = null
             return
         }
+        val equalizer = settingsRepository.state.value.equalizer
         if (appliedVolumePlayer === currentPlayer &&
             appliedVolume == normalized &&
-            appliedGainDb == loudnessCurrentGainDb
+            appliedGainDb == loudnessCurrentGainDb &&
+            appliedEqualizer == equalizer
         ) return
-        currentPlayer.setGainAndVolume(loudnessCurrentGainDb, normalized)
+        currentPlayer.setGainAndVolume(
+            gainDb = loudnessCurrentGainDb,
+            volume = normalized,
+            equalizer = equalizer,
+        )
         appliedVolumePlayer = currentPlayer
         appliedVolume = normalized
         appliedGainDb = loudnessCurrentGainDb
+        appliedEqualizer = equalizer
     }
 
     private fun rescheduleFadeTick() {

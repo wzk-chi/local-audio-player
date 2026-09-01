@@ -43,6 +43,7 @@ import com.localaudio.player.ui.player.PlayerScreen
 import com.localaudio.player.ui.settings.LibrarySettingsScreen
 import com.localaudio.player.ui.settings.AutoSkipScreen
 import com.localaudio.player.ui.settings.RecycleBinScreen
+import com.localaudio.player.ui.settings.EqualizerScreen
 import com.localaudio.player.ui.settings.SettingsScreen
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -61,7 +62,8 @@ fun LocalAudioApp(
     }
     val isSecondarySettings = state.screen == AppScreen.LIBRARY_SETTINGS ||
         state.screen == AppScreen.AUTO_SKIP_SETTINGS ||
-        state.screen == AppScreen.RECYCLE_BIN
+        state.screen == AppScreen.RECYCLE_BIN ||
+        state.screen == AppScreen.EQUALIZER_SETTINGS
     val pagerState = rememberPagerState(
         initialPage = mainPageFor(state.screen),
         pageCount = { MAIN_PAGE_COUNT },
@@ -116,6 +118,23 @@ fun LocalAudioApp(
                             onBack = { onEvent(AppEvent.Back) },
                             onRestore = { onEvent(AppEvent.RestoreRecycle(it)) },
                             onClean = { onEvent(AppEvent.CleanRecycle(it)) },
+                        )
+                        AppScreen.EQUALIZER_SETTINGS -> EqualizerScreen(
+                            settings = state.settings.equalizer,
+                            onBack = { onEvent(AppEvent.Back) },
+                            onEnabledChange = {
+                                onEvent(AppEvent.UpdateSetting(SettingChange.SetEqualizerEnabled(it)))
+                            },
+                            onPresetSelected = {
+                                onEvent(AppEvent.UpdateSetting(SettingChange.SetEqualizerPreset(it)))
+                            },
+                            onBandGainChange = { index, valueDb ->
+                                onEvent(
+                                    AppEvent.UpdateSetting(
+                                        SettingChange.SetEqualizerBandGain(index, valueDb),
+                                    ),
+                                )
+                            },
                         )
                         else -> error("Unexpected secondary screen: ${state.screen}")
                     }
@@ -175,6 +194,9 @@ fun LocalAudioApp(
                                 onOpenQueue = { onEvent(AppEvent.ShowDialog(AppDialog.Queue)) },
                                 onOpenTimer = { onEvent(AppEvent.ShowDialog(AppDialog.Timer)) },
                                 onOpenMode = { onEvent(AppEvent.ShowDialog(AppDialog.Mode)) },
+                                onOpenEqualizer = {
+                                    onEvent(AppEvent.OpenEqualizer(AppScreen.PLAYER))
+                                },
                                 onOpenDirectorySkip = {
                                     state.playback.currentItem?.let { item ->
                                         onEvent(
@@ -215,6 +237,9 @@ fun LocalAudioApp(
                                         onSetLoudnessEnabled = {
                                             onEvent(AppEvent.UpdateSetting(SettingChange.SetLoudnessEnabled(it)))
                                         },
+                                        onOpenEqualizer = {
+                                            onEvent(AppEvent.OpenEqualizer(AppScreen.SETTINGS))
+                                        },
                                         onSetTimerEnabled = {
                                             onEvent(AppEvent.UpdateSetting(SettingChange.SetTimerEnabled(it)))
                                         },
@@ -238,10 +263,12 @@ fun LocalAudioApp(
                                     onSeekTo = { dispatchPlayback(PlaybackCommand.SeekTo(it)) },
                                 )
                             }
-                            AppScreen.LIBRARY_SETTINGS, AppScreen.AUTO_SKIP_SETTINGS -> {
+                            AppScreen.LIBRARY_SETTINGS,
+                            AppScreen.AUTO_SKIP_SETTINGS,
+                            AppScreen.RECYCLE_BIN,
+                            AppScreen.EQUALIZER_SETTINGS -> {
                                 error("Secondary settings is outside the main pager")
                             }
-                            AppScreen.RECYCLE_BIN -> error("Recycle bin is outside the main pager")
                         }
                     }
                 }
@@ -295,7 +322,9 @@ private fun BottomNavigation(screen: AppScreen, onScreenSelected: (AppScreen) ->
             label = { Text(stringResource(R.string.nav_player)) },
         )
         NavigationBarItem(
-            selected = screen == AppScreen.SETTINGS || screen == AppScreen.LIBRARY_SETTINGS,
+            selected = screen == AppScreen.SETTINGS ||
+                screen == AppScreen.LIBRARY_SETTINGS ||
+                screen == AppScreen.EQUALIZER_SETTINGS,
             onClick = { onScreenSelected(AppScreen.SETTINGS) },
             icon = { Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.nav_settings)) },
             label = { Text(stringResource(R.string.nav_settings)) },
@@ -306,7 +335,11 @@ private fun BottomNavigation(screen: AppScreen, onScreenSelected: (AppScreen) ->
 private fun mainPageFor(screen: AppScreen): Int = when (screen) {
     AppScreen.HOME -> 0
     AppScreen.PLAYER -> 1
-    AppScreen.SETTINGS, AppScreen.LIBRARY_SETTINGS, AppScreen.AUTO_SKIP_SETTINGS, AppScreen.RECYCLE_BIN -> 2
+    AppScreen.SETTINGS,
+    AppScreen.LIBRARY_SETTINGS,
+    AppScreen.AUTO_SKIP_SETTINGS,
+    AppScreen.RECYCLE_BIN,
+    AppScreen.EQUALIZER_SETTINGS -> 2
 }
 
 private fun screenForMainPage(page: Int): AppScreen = when (page) {

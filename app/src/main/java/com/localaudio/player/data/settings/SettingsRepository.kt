@@ -65,6 +65,49 @@ class SettingsRepository(context: Context) {
     fun updateLoudnessEnabled(value: Boolean) =
         updateBoolean(KEY_LOUDNESS_ENABLED, value) { it.copy(loudnessEnabled = value) }
 
+    fun updateEqualizerEnabled(value: Boolean) = updateState(
+        preferences.edit().putBoolean(KEY_EQUALIZER_ENABLED, value),
+    ) {
+        it.copy(equalizer = it.equalizer.copy(enabled = value))
+    }
+
+    fun updateEqualizerPreset(value: EqualizerPreset) {
+        val gains = normalizeEqualizerGains(value.defaultGainsDb())
+        updateState(
+            preferences.edit()
+                .putString(KEY_EQUALIZER_PRESET, value.name)
+                .putString(KEY_EQUALIZER_GAINS, gains.joinToString(",")),
+        ) {
+            it.copy(
+                equalizer = it.equalizer.copy(
+                    preset = value,
+                    gainsDb = gains,
+                ),
+            )
+        }
+    }
+
+    fun updateEqualizerBandGain(index: Int, value: Int) {
+        if (index !in 0 until EQUALIZER_BAND_COUNT) return
+        val current = _state.value.equalizer
+        val gains = current.gainsDb.toMutableList().apply {
+            while (size < EQUALIZER_BAND_COUNT) add(0)
+            this[index] = value.coerceIn(EQUALIZER_MIN_GAIN_DB, EQUALIZER_MAX_GAIN_DB)
+        }.let(::normalizeEqualizerGains)
+        updateState(
+            preferences.edit()
+                .putString(KEY_EQUALIZER_PRESET, EqualizerPreset.CUSTOM.name)
+                .putString(KEY_EQUALIZER_GAINS, gains.joinToString(",")),
+        ) {
+            it.copy(
+                equalizer = it.equalizer.copy(
+                    preset = EqualizerPreset.CUSTOM,
+                    gainsDb = gains,
+                ),
+            )
+        }
+    }
+
     fun updateTimerDurationOptions(values: List<Long>) {
         val options = values.filter { it > 0L }.distinct().sorted()
         if (options.isEmpty()) return
@@ -174,7 +217,23 @@ class SettingsRepository(context: Context) {
                 .coerceIn(MIN_FADE_DURATION_MS, MAX_FADE_DURATION_MS)
                 .let { (it / FADE_DURATION_STEP_MS) * FADE_DURATION_STEP_MS },
             loudnessEnabled = preferences.getBoolean(KEY_LOUDNESS_ENABLED, true),
+            equalizer = decodeEqualizer(),
             savedHomeLocation = decodeLocation(preferences.getString(KEY_HOME_LOCATION, null)),
+        )
+    }
+
+    private fun decodeEqualizer(): EqualizerSettings {
+        val preset = preferences.getString(KEY_EQUALIZER_PRESET, null)
+            ?.let { value -> runCatching { EqualizerPreset.valueOf(value) }.getOrNull() }
+            ?: EqualizerPreset.FLAT
+        val gains = preferences.getString(KEY_EQUALIZER_GAINS, null)
+            ?.split(',')
+            ?.mapNotNull(String::toIntOrNull)
+            ?: preset.defaultGainsDb()
+        return EqualizerSettings(
+            enabled = preferences.getBoolean(KEY_EQUALIZER_ENABLED, false),
+            preset = preset,
+            gainsDb = normalizeEqualizerGains(gains),
         )
     }
 
@@ -208,6 +267,9 @@ class SettingsRepository(context: Context) {
         const val KEY_FADE_ENABLED = "fade_enabled"
         const val KEY_FADE_DURATION = "fade_duration"
         const val KEY_LOUDNESS_ENABLED = "loudness_enabled"
+        const val KEY_EQUALIZER_ENABLED = "equalizer_enabled"
+        const val KEY_EQUALIZER_PRESET = "equalizer_preset"
+        const val KEY_EQUALIZER_GAINS = "equalizer_gains"
         const val KEY_HOME_LOCATION = "home_location"
         const val KEY_NOTIFICATION_REQUESTED = "notification_requested"
     }
