@@ -108,17 +108,16 @@ internal fun rememberPlaybackSliderState(state: PlaybackState): PlaybackSliderSt
 }
 
 @Composable
-fun PlaybackProgressSlider(
+internal fun PlaybackSlider(
     state: PlaybackState,
+    sliderState: PlaybackSliderState,
     onSeekTo: (Long) -> Unit,
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier,
 ) {
-    val sliderState = rememberPlaybackSliderState(state)
-    val sliderValue = sliderState.positionMs
-    val seeking = sliderState.seeking
     val max = state.durationMs.coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toFloat()
-
     WavyPlayerSlider(
-        value = (sliderValue / max).coerceIn(0f, 1f),
+        value = (sliderState.positionMs / max).coerceIn(0f, 1f),
         onValueChange = {
             sliderState.seeking = true
             sliderState.positionMs = it * max
@@ -131,6 +130,21 @@ fun PlaybackProgressSlider(
             }
         },
         enabled = state.currentItem != null,
+        isPlaying = isPlaying,
+        modifier = modifier,
+    )
+}
+
+@Composable
+fun PlaybackProgressSlider(
+    state: PlaybackState,
+    onSeekTo: (Long) -> Unit,
+) {
+    val sliderState = rememberPlaybackSliderState(state)
+    PlaybackSlider(
+        state = state,
+        sliderState = sliderState,
+        onSeekTo = onSeekTo,
         isPlaying = false,
         modifier = Modifier
             .fillMaxWidth()

@@ -57,7 +57,6 @@ import com.localaudio.player.R
 import com.localaudio.player.playback.PlaybackState
 import com.localaudio.player.ui.components.PlayerAction
 import com.localaudio.player.ui.components.PlayerTransportSegment
-import com.localaudio.player.ui.components.WavyPlayerSlider
 import com.localaudio.player.ui.util.formatTime
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -83,10 +82,6 @@ fun PlayerScreen(
     onFinishAutoSkipMark: () -> Unit,
     onCancelAutoSkipMark: () -> Unit,
 ) {
-    val sliderState = rememberPlaybackSliderState(state)
-    val sliderValue = sliderState.positionMs
-    val seeking = sliderState.seeking
-    val max = state.durationMs.coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toFloat()
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -116,6 +111,10 @@ fun PlayerScreen(
             horizontalPadding = 8.dp,
         )
         Spacer(modifier = Modifier.height(10.dp))
+        PlaybackProgressSection(
+            state = state,
+            onSeekTo = onSeekTo,
+        )
         val segmentStartShape = RoundedCornerShape(
             topStart = 60.dp,
             bottomStart = 60.dp,
@@ -129,48 +128,6 @@ fun PlayerScreen(
             bottomEnd = 60.dp,
         )
         val segmentInnerShape = RoundedCornerShape(8.dp)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .offset(y = (-6).dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            WavyPlayerSlider(
-                value = (sliderValue / max).coerceIn(0f, 1f),
-                onValueChange = {
-                    sliderState.seeking = true
-                    sliderState.positionMs = it * max
-                },
-                onValueChangeFinished = {
-                    if (sliderState.seeking) {
-                        val targetPositionMs = sliderState.positionMs.toLong()
-                        sliderState.seeking = false
-                        onSeekTo(targetPositionMs)
-                    }
-                },
-                enabled = state.currentItem != null,
-                isPlaying = state.isPlaying,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset(y = (-6).dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = formatTime(if (seeking) sliderValue.toLong() else state.positionMs),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = formatTime(state.durationMs),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -296,6 +253,48 @@ fun PlayerScreen(
                 modifier = Modifier.size(width = 76.dp, height = 52.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun PlaybackProgressSection(
+    state: PlaybackState,
+    onSeekTo: (Long) -> Unit,
+) {
+    val sliderState = rememberPlaybackSliderState(state)
+    val sliderValue = sliderState.positionMs
+    val seeking = sliderState.seeking
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .offset(y = (-6).dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        PlaybackSlider(
+            state = state,
+            sliderState = sliderState,
+            onSeekTo = onSeekTo,
+            isPlaying = state.isPlaying,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .offset(y = (-6).dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = formatTime(if (seeking) sliderValue.toLong() else state.positionMs),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = formatTime(state.durationMs),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
