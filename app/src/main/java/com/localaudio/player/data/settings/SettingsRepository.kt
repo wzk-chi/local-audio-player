@@ -6,7 +6,6 @@ import com.localaudio.player.data.model.FolderLocation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import org.json.JSONObject
 
 /** Owns typed settings state and its SharedPreferences persistence. */
@@ -98,12 +97,16 @@ class SettingsRepository(context: Context) {
         updateState(editor) { it.copy(savedHomeLocation = value) }
     }
 
+    @Synchronized
     private fun updateState(
         editor: SharedPreferences.Editor,
         transform: (AppSettings) -> AppSettings,
     ) {
+        val current = _state.value
+        val next = transform(current)
+        if (next == current) return
         editor.apply()
-        _state.update(transform)
+        _state.value = next
     }
 
     private fun updateString(

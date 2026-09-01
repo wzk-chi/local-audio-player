@@ -8,6 +8,7 @@ import com.localaudio.player.data.library.LibraryState
 import com.localaudio.player.data.library.RecycleBinRepository
 import com.localaudio.player.data.model.AudioItem
 import com.localaudio.player.data.model.AutoSkipSegment
+import com.localaudio.player.data.model.FolderItem
 import com.localaudio.player.data.model.FolderLocation
 import com.localaudio.player.data.settings.AppSettings
 import com.localaudio.player.data.settings.SettingsRepository
@@ -47,14 +48,36 @@ class AppViewModel(
     val effects: Flow<AppEffect> = _effects.receiveAsFlow()
     val settings: StateFlow<AppSettings> = settingsRepository.state
 
+    private val homeLocation = navigation
+        .map { it.homeLocation }
+        .distinctUntilChanged()
+
+    private val homeRows = combine(
+        libraryRepository.state
+            .map { library ->
+                HomeRowsInput(
+                    folders = library.folders,
+                    items = library.items,
+                )
+            }
+            // LibraryRepository keeps these list instances unchanged for scan progress updates.
+            .distinctUntilChanged { previous, current ->
+                previous.folders === current.folders && previous.items === current.items
+            },
+        homeLocation,
+    ) { input, location ->
+        homeRowsBuilder.rows(input.folders, input.items, location)
+    }
+
     private val homeContent = combine(
         libraryRepository.state,
-        navigation.map { it.homeLocation }.distinctUntilChanged(),
-    ) { library, location ->
+        homeLocation,
+        homeRows,
+    ) { library, location, rows ->
         HomeContent(
             library = library,
             location = location,
-            rows = homeRowsBuilder.rows(library, location),
+            rows = rows,
         )
     }
 
@@ -510,5 +533,10 @@ class AppViewModel(
         val library: LibraryState,
         val location: FolderLocation?,
         val rows: List<HomeRow>,
+    )
+
+    private data class HomeRowsInput(
+        val folders: List<FolderItem>,
+        val items: List<AudioItem>,
     )
 }

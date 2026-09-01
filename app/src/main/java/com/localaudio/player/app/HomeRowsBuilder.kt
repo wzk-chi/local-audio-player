@@ -1,19 +1,23 @@
 package com.localaudio.player.app
 
 import com.localaudio.player.app.util.compareNatural
-import com.localaudio.player.data.library.LibraryState
 import com.localaudio.player.data.model.AudioItem
+import com.localaudio.player.data.model.FolderItem
 import com.localaudio.player.data.model.FolderLocation
 
 class HomeRowsBuilder {
-    fun rows(state: LibraryState, location: FolderLocation?): List<HomeRow> = if (location == null) {
-        state.folders
+    fun rows(
+        folders: List<FolderItem>,
+        items: List<AudioItem>,
+        location: FolderLocation?,
+    ): List<HomeRow> = if (location == null) {
+        folders
             .map { HomeRow.Directory(FolderLocation(it.uri, it.displayName, "", it.displayName)) }
             .sortedWith { left, right -> compareNatural(left.location.name, right.location.name) }
     } else {
         buildList {
-            addAll(immediateDirectories(state.items, location).map(HomeRow::Directory))
-            addAll(audioIn(state.items, location.folderUri, location.relativePath).map(HomeRow::Audio))
+            addAll(immediateDirectories(items, location).map(HomeRow::Directory))
+            addAll(audioIn(items, location.folderUri, location.relativePath).map(HomeRow::Audio))
         }
     }
 
@@ -31,21 +35,23 @@ class HomeRowsBuilder {
 
     private fun immediateDirectories(items: List<AudioItem>, current: FolderLocation): List<FolderLocation> {
         val prefix = if (current.relativePath.isEmpty()) "" else "${current.relativePath}/"
-        return items.asSequence()
-            .filter { it.folderUri == current.folderUri }
-            .mapNotNull { item ->
-                if (item.relativePath == current.relativePath || !item.relativePath.startsWith(prefix)) {
-                    return@mapNotNull null
+        val childPaths = HashSet<String>()
+        return buildList {
+            items.forEach { item ->
+                if (item.folderUri != current.folderUri ||
+                    item.relativePath == current.relativePath ||
+                    !item.relativePath.startsWith(prefix)
+                ) {
+                    return@forEach
                 }
                 val child = item.relativePath.removePrefix(prefix).substringBefore('/')
-                if (child.isBlank()) {
-                    null
-                } else {
-                    FolderLocation(current.folderUri, current.rootName, prefix + child, child)
+                if (child.isNotBlank()) {
+                    val childPath = prefix + child
+                    if (childPaths.add(childPath)) {
+                        add(FolderLocation(current.folderUri, current.rootName, childPath, child))
+                    }
                 }
             }
-            .distinctBy { it.relativePath }
-            .sortedWith { left, right -> compareNatural(left.name, right.name) }
-            .toList()
+        }.sortedWith { left, right -> compareNatural(left.name, right.name) }
     }
 }

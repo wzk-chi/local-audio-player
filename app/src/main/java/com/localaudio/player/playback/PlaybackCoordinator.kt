@@ -44,6 +44,16 @@ class PlaybackCoordinator(
     private var fadeOutStartVolume = 1f
     private var pendingTrackSelection: TrackSelection? = null
     private var autoSkipPreview: AutoSkipPreview? = null
+    private var cachedSkipRanges: List<SkipRange> = emptyList()
+    private var cachedSkipContentHash: String? = null
+    private var cachedSkipFolderUri: String? = null
+    private var cachedSkipRelativePath: String? = null
+    private var cachedSkipDurationMs = Long.MIN_VALUE
+    private var cachedAutoSkipRevision = Long.MIN_VALUE
+    private var cachedDirectorySkipRevision = Long.MIN_VALUE
+    private var cachedSkipPreview: AutoSkipPreview? = null
+    private var appliedVolumePlayer: PlatformPlayer? = null
+    private var appliedVolume = -1f
 
     private val tick = object : Runnable {
         override fun run() {
@@ -78,6 +88,7 @@ class PlaybackCoordinator(
 
     fun attachPlayer(player: PlatformPlayer) {
         this.player = player
+        appliedVolumePlayer = null
         publishState()
     }
 
@@ -129,6 +140,7 @@ class PlaybackCoordinator(
         persistPlayback()
         player?.release()
         player = null
+        appliedVolumePlayer = null
     }
 
     private fun playQueue(items: List<AudioItem>, index: Int) {
@@ -292,6 +304,7 @@ class PlaybackCoordinator(
         val currentPlayer = player ?: return
         handledTerminalGeneration = -1L
         pendingSeekMs = savedPositionMs
+        appliedVolumePlayer = null
         val generation = currentPlayer.load(item.uri)
         currentGeneration = generation
         publishState()
@@ -559,7 +572,7 @@ class PlaybackCoordinator(
             return false
         }
 
-        val fadeDuration = fadeDurationMs()
+        val fadeDuration = fadeDurationMs(settings.fadeDurationMs)
         var volume = outputVolume
         var active = false
 
@@ -605,12 +618,14 @@ class PlaybackCoordinator(
     private fun updateFadeOut() {
         val selection = pendingTrackSelection ?: return
         val currentPlayer = player
-        if (!settingsRepository.state.value.fadeEnabled || currentPlayer?.isPrepared != true) {
+        val settings = settingsRepository.state.value
+        if (!settings.fadeEnabled || currentPlayer?.isPrepared != true) {
             applyTrackSelection(selection)
             return
         }
         val elapsed = (SystemClock.uptimeMillis() - fadeOutStartedAtMs).coerceAtLeast(0L)
-        val progress = (elapsed.toFloat() / fadeDurationMs().toFloat()).coerceIn(0f, 1f)
+        val progress = (elapsed.toFloat() / fadeDurationMs(settings.fadeDurationMs).toFloat())
+            .coerceIn(0f, 1f)
         setOutputVolume(currentPlayer, fadeOutStartVolume * (1f - progress))
         if (progress >= 1f) {
             applyTrackSelection(selection)
@@ -624,7 +639,7 @@ class PlaybackCoordinator(
         player?.takeIf { it.isPrepared }?.let { setOutputVolume(it, 1f) }
     }
 
-    private fun fadeDurationMs(): Long = settingsRepository.state.value.fadeDurationMs
+    private fun fadeDurationMs(value: Long): Long = value
         .coerceIn(MIN_FADE_DURATION_MS, MAX_FADE_DURATION_MS)
         .let { (it / FADE_DURATION_STEP_MS) * FADE_DURATION_STEP_MS }
         .coerceAtLeast(FADE_DURATION_STEP_MS)
@@ -632,7 +647,14 @@ class PlaybackCoordinator(
     private fun setOutputVolume(currentPlayer: PlatformPlayer?, volume: Float) {
         val normalized = volume.coerceIn(0f, 1f)
         outputVolume = normalized
-        currentPlayer?.setVolume(normalized)
+        if (currentPlayer == null || !currentPlayer.isPrepared) {
+            appliedVolumePlayer = null
+            return
+        }
+        if (appliedVolumePlayer === currentPlayer && appliedVolume == normalized) return
+        currentPlayer.setVolume(normalized)
+        appliedVolumePlayer = currentPlayer
+        appliedVolume = normalized
     }
 
     private fun rescheduleFadeTick() {
@@ -647,28 +669,21 @@ class PlaybackCoordinator(
         val item = queue.getOrNull(currentIndex) ?: return false
         val position = currentPosition()
         val duration = currentPlayer.durationMs().coerceAtLeast(0L)
-        val segments = autoSkipPreview
-            ?.takeIf { it.audioKey == item.key }
-            ?.let { listOf(SkipRange(it.startMs, it.endMs)) }
-            ?: (item.contentHash
-                ?.let { autoSkipRepository.segmentsFor(it) }
-                .orEmpty()
-                .map { SkipRange(it.startMs, it.endMs) } + directorySkipSegments(item, duration))
-        val sortedSegments = segments.sortedBy { it.startMs }
-        var target = sortedSegments
-            .firstOrNull { position >= it.startMs && position < it.endMs }
-            ?.endMs
-        if (target != null) {
-            var expanded: Boolean
-            do {
-                expanded = false
-                sortedSegments.forEach { segment ->
-                    if (segment.startMs <= target!! && segment.endMs > target!!) {
-                        target = segment.endMs
-                        expanded = true
-                    }
+        val ranges = skipRangesFor(item, duration)
+        var target: Long? = null
+        var low = 0
+        var high = ranges.lastIndex
+        while (low <= high) {
+            val middle = (low + high) ushr 1
+            val range = ranges[middle]
+            when {
+                position < range.startMs -> high = middle - 1
+                position >= range.endMs -> low = middle + 1
+                else -> {
+                    target = range.endMs
+                    break
                 }
-            } while (expanded)
+            }
         }
         val effectiveTarget = target?.coerceAtMost(duration)
             ?.takeIf { it > position }
@@ -677,6 +692,69 @@ class PlaybackCoordinator(
         pendingSeekMs = null
         currentPlayer.seekTo(effectiveTarget)
         return true
+    }
+
+    /**
+     * Builds the effective ranges only when the current track, duration, preview, or rules change.
+     * The returned ranges are sorted and merged, which makes the tick a binary search with no
+     * per-tick collection or interval allocations.
+     */
+    private fun skipRangesFor(item: AudioItem, durationMs: Long): List<SkipRange> {
+        val activePreview = autoSkipPreview
+        val preview = if (activePreview != null && activePreview.audioKey == item.key) {
+            activePreview
+        } else {
+            null
+        }
+        val autoSkipRevision = autoSkipRepository.revision
+        val directorySkipRevision = directorySkipRepository.revision
+        if (cachedSkipContentHash == item.contentHash &&
+            cachedSkipFolderUri == item.folderUri &&
+            cachedSkipRelativePath == item.relativePath &&
+            cachedSkipDurationMs == durationMs &&
+            cachedAutoSkipRevision == autoSkipRevision &&
+            cachedDirectorySkipRevision == directorySkipRevision &&
+            cachedSkipPreview == preview
+        ) {
+            return cachedSkipRanges
+        }
+
+        val candidates = ArrayList<SkipRange>()
+        if (preview != null) {
+            candidates += SkipRange(preview.startMs, preview.endMs)
+        } else {
+            item.contentHash
+                ?.let { autoSkipRepository.segmentsFor(it) }
+                ?.forEach { segment ->
+                    candidates += SkipRange(segment.startMs, segment.endMs)
+                }
+            candidates += directorySkipSegments(item, durationMs)
+        }
+        candidates.sortBy { it.startMs }
+
+        val merged = ArrayList<SkipRange>(candidates.size)
+        candidates.forEach { range ->
+            if (range.endMs <= range.startMs) return@forEach
+            val lastIndex = merged.lastIndex
+            if (lastIndex >= 0 && range.startMs <= merged[lastIndex].endMs) {
+                val last = merged[lastIndex]
+                if (range.endMs > last.endMs) {
+                    merged[lastIndex] = last.copy(endMs = range.endMs)
+                }
+            } else {
+                merged += range
+            }
+        }
+
+        cachedSkipContentHash = item.contentHash
+        cachedSkipFolderUri = item.folderUri
+        cachedSkipRelativePath = item.relativePath
+        cachedSkipDurationMs = durationMs
+        cachedAutoSkipRevision = autoSkipRevision
+        cachedDirectorySkipRevision = directorySkipRevision
+        cachedSkipPreview = preview
+        cachedSkipRanges = if (merged.isEmpty()) emptyList() else merged
+        return cachedSkipRanges
     }
 
     private fun directorySkipSegments(item: AudioItem, durationMs: Long): List<SkipRange> {

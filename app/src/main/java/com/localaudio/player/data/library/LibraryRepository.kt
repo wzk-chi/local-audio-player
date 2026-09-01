@@ -126,10 +126,14 @@ class LibraryRepository(
             return
         }
         if (!deleteSource) {
-            recycleBinRepository.softDeleteItems(listOf(current))
-            removeVisibleItems(listOf(current))
-            persistLibrary()
-            post { onResult(Result.success(setOf(current.key))) }
+            fileOperationExecutor.execute {
+                recycleBinRepository.softDeleteItems(listOf(current))
+                post {
+                    removeVisibleItems(listOf(current))
+                    persistLibrary()
+                    onResult(Result.success(setOf(current.key)))
+                }
+            }
             return
         }
 
@@ -192,12 +196,8 @@ class LibraryRepository(
                     title = location.name,
                     deletedAtMs = System.currentTimeMillis(),
                 )
+                recycleBinRepository.softDeleteDirectory(currentItems, recycleFolder)
                 post {
-                    recycleBinRepository.softDeleteItems(
-                        currentItems,
-                        deletedByFolderUri = directoryUri.toString(),
-                    )
-                    recycleBinRepository.softDeleteFolder(recycleFolder)
                     removeLibraryDirectory(location, currentItems)
                     persistLibrary()
                     onResult(Result.success(currentItems.mapTo(HashSet()) { it.key }))
@@ -370,10 +370,12 @@ class LibraryRepository(
                 if (!deleted) success = false
             }
             if (success) {
+                val deletedFolderUris = folders.mapTo(HashSet()) {
+                    Uri.parse(it.uri).normalizeScheme().toString()
+                }
                 items.filter { item ->
-                    item.deletedByFolderUri == null || folders.none { folder ->
-                        sameUri(item.deletedByFolderUri, folder.uri)
-                    }
+                    item.deletedByFolderUri == null ||
+                        Uri.parse(item.deletedByFolderUri).normalizeScheme().toString() !in deletedFolderUris
                 }.forEach { item ->
                     val deleted = runCatching {
                         DocumentsContract.deleteDocument(context.contentResolver, Uri.parse(item.uri))
@@ -449,7 +451,7 @@ class LibraryRepository(
                         )
                     }
                     jobs.remove(folder.uri)
-                    persist { store.writeItems(items) }
+                    persist { store.replaceItemsForFolder(folder.uri, visibleResult) }
                 }
             } catch (error: Exception) {
                 postCurrent(folder.uri, scanToken) {
@@ -595,9 +597,6 @@ class LibraryRepository(
     }
 
     private companion object {
-        fun sameUri(left: String?, right: String): Boolean =
-            left != null && Uri.parse(left).normalizeScheme() == Uri.parse(right).normalizeScheme()
-
         fun isInPath(path: String, parent: String): Boolean =
             parent.isEmpty() || path == parent || path.startsWith("$parent/")
 

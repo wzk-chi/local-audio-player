@@ -32,6 +32,9 @@ class AudioDatabase(context: Context) :
                 "ALTER TABLE $TABLE_AUDIO_ITEMS ADD COLUMN $COLUMN_LAST_MODIFIED_MS INTEGER NOT NULL DEFAULT -1",
             )
         }
+        if (oldVersion < VERSION_AUDIO_FOLDER_INDEX) {
+            createAudioItemsFolderIndex(db)
+        }
     }
 
     private fun createAudioItemsTable(db: SQLiteDatabase) {
@@ -50,6 +53,16 @@ class AudioDatabase(context: Context) :
                 $COLUMN_CONTENT_HASH_ALGORITHM TEXT,
                 $COLUMN_CONTENT_HASH TEXT
             )
+            """.trimIndent(),
+        )
+        createAudioItemsFolderIndex(db)
+    }
+
+    private fun createAudioItemsFolderIndex(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS ${TABLE_AUDIO_ITEMS}_folder_uri_index
+            ON $TABLE_AUDIO_ITEMS ($COLUMN_FOLDER_URI)
             """.trimIndent(),
         )
     }
@@ -146,9 +159,10 @@ class AudioDatabase(context: Context) :
         const val COLUMN_ROOT_FOLDER_URI = "root_folder_uri"
 
         private const val DATABASE_NAME = "library.db"
-        private const val DATABASE_VERSION = 6
+        private const val DATABASE_VERSION = 7
         private const val VERSION_AUTO_SKIP_TABLE = 2
         private const val VERSION_RECYCLE_SCOPE = 5
         private const val VERSION_AUDIO_METADATA = 6
+        private const val VERSION_AUDIO_FOLDER_INDEX = 7
     }
 }

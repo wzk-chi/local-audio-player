@@ -47,36 +47,41 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         val folders = current.folders.filter { it.key in folderKeys }
         val itemKeys = keys.filter { it.startsWith(ITEM_KEY_PREFIX) }
             .map { it.removePrefix(ITEM_KEY_PREFIX) }.toMutableSet()
-        folders.forEach { folder ->
-            val folderItems = current.items.filter { item ->
-                sameDocument(item.deletedByFolderUri, folder.uri)
-            }
-            folderItems.forEach { itemKeys += it.key }
+        val folderUriKeys = folders.mapTo(HashSet()) { normalizeUri(it.uri) }
+        val folderDocumentKeys = folders.mapNotNullTo(HashSet()) {
+            documentIdentity(it.uri).documentKey
         }
-        return current.items.filter { it.key in itemKeys } to folders
+        val selectedItems = current.items.filter { item ->
+            if (item.key in itemKeys) return@filter true
+            val deletedByFolderUri = item.deletedByFolderUri ?: return@filter false
+            val identity = documentIdentity(deletedByFolderUri)
+            identity.normalizedUri in folderUriKeys || identity.documentKey in folderDocumentKeys
+        }
+        return selectedItems to folders
     }
 
     @Synchronized
     fun softDeleteItems(items: List<AudioItem>, deletedByFolderUri: String? = null) {
-        val now = System.currentTimeMillis()
-        val nextItems = _state.value.items.toMutableList()
-        items.forEach { item ->
-            val existing = nextItems.firstOrNull { sameDocument(it.uri, item.uri.toString()) }
-            val replacement = item.toRecycleItem(
-                deletedAtMs = existing?.deletedAtMs ?: now,
-                existing = existing,
-                deletedByFolderUri = deletedByFolderUri,
-            )
-            nextItems.removeAll { sameDocument(it.uri, item.uri.toString()) }
-            nextItems += replacement
-        }
-        updateState(_state.value.copy(items = nextItems))
+        val current = _state.value
+        val nextItems = replaceSoftDeletedItems(
+            existingItems = current.items,
+            items = items,
+            deletedByFolderUri = deletedByFolderUri,
+        )
+        updateState(current.copy(items = nextItems))
     }
 
+    /** Updates a deleted directory and all of its audio children in one state/persistence operation. */
     @Synchronized
-    fun softDeleteFolder(folder: RecycleFolder) {
-        val folders = _state.value.folders.filterNot { it.key == folder.key } + folder
-        updateState(_state.value.copy(folders = folders))
+    fun softDeleteDirectory(items: List<AudioItem>, folder: RecycleFolder) {
+        val current = _state.value
+        val nextItems = replaceSoftDeletedItems(
+            existingItems = current.items,
+            items = items,
+            deletedByFolderUri = folder.uri,
+        )
+        val nextFolders = current.folders.filterNot { it.key == folder.key } + folder
+        updateState(current.copy(items = nextItems, folders = nextFolders))
     }
 
     /** Refreshes deleted directory paths discovered outside the app. */
@@ -337,6 +342,54 @@ class RecycleBinRepository(private val store: RecycleBinStore) {
         deletedAtMs = deletedAtMs,
         deletedByFolderUri = deletedByFolderUri ?: existing?.deletedByFolderUri,
     )
+
+    private fun replaceSoftDeletedItems(
+        existingItems: List<RecycleItem>,
+        items: List<AudioItem>,
+        deletedByFolderUri: String?,
+    ): List<RecycleItem> {
+        if (items.isEmpty()) return existingItems
+
+        val uriCandidates = HashMap<String, MutableList<Int>>(existingItems.size)
+        val documentCandidates = HashMap<String, MutableList<Int>>(existingItems.size)
+        existingItems.forEachIndexed { index, recycleItem ->
+            val identity = documentIdentity(recycleItem.uri)
+            uriCandidates.getOrPut(identity.normalizedUri) { ArrayList() } += index
+            identity.documentKey?.let { key ->
+                documentCandidates.getOrPut(key) { ArrayList() } += index
+            }
+        }
+
+        val removed = BooleanArray(existingItems.size)
+        val replacements = ArrayList<RecycleItem>(items.size)
+        val now = System.currentTimeMillis()
+        items.forEach { item ->
+            val identity = documentIdentity(item.uri.toString())
+            val candidates = LinkedHashSet<Int>()
+            uriCandidates[identity.normalizedUri]?.let(candidates::addAll)
+            identity.documentKey?.let { key ->
+                documentCandidates[key]?.let(candidates::addAll)
+            }
+            val existingIndex = candidates
+                .asSequence()
+                .filterNot(removed::get)
+                .minOrNull()
+            val existing = existingIndex?.let(existingItems::get)
+            candidates.forEach { removed[it] = true }
+            replacements += item.toRecycleItem(
+                deletedAtMs = existing?.deletedAtMs ?: now,
+                existing = existing,
+                deletedByFolderUri = deletedByFolderUri,
+            )
+        }
+
+        return buildList(existingItems.size - removed.count { it } + replacements.size) {
+            existingItems.forEachIndexed { index, item ->
+                if (!removed[index]) add(item)
+            }
+            addAll(replacements)
+        }
+    }
 
     private fun normalizeUri(value: String): String = Uri.parse(value).normalizeScheme().toString()
 

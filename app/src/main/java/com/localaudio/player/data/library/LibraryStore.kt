@@ -74,6 +74,29 @@ class LibraryStore(context: Context, private val database: AudioDatabase) {
         }
     }
 
+    /** Replaces only one scanned root while keeping other library roots untouched. */
+    fun replaceItemsForFolder(folderUri: String, items: List<AudioItem>) {
+        val db = database.writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete(
+                AudioDatabase.TABLE_AUDIO_ITEMS,
+                "${AudioDatabase.COLUMN_FOLDER_URI} = ?",
+                arrayOf(folderUri),
+            )
+            items
+                .asSequence()
+                .filter { it.folderUri == folderUri }
+                .distinctBy { it.key }
+                .forEach { item ->
+                    db.insertOrThrow(AudioDatabase.TABLE_AUDIO_ITEMS, null, item.toContentValues())
+                }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     private fun Cursor.toAudioItem(): AudioItem {
         val hash = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_CONTENT_HASH))
         val hashAlgorithm = getString(getColumnIndexOrThrow(AudioDatabase.COLUMN_CONTENT_HASH_ALGORITHM))

@@ -72,7 +72,7 @@ import com.localaudio.player.data.model.AudioItem
 import com.localaudio.player.data.model.FolderLocation
 import com.localaudio.player.data.settings.HomeHeaderMode
 import com.localaudio.player.ui.util.formatTime
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 @Composable
@@ -97,25 +97,27 @@ fun HomeScreen(
     var previousIndex by remember { mutableIntStateOf(0) }
     var locateRequest by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(headerMode, listState) {
+    LaunchedEffect(headerMode) {
         headerVisible = headerMode != HomeHeaderMode.HIDDEN
         previousIndex = listState.firstVisibleItemIndex
         if (headerMode == HomeHeaderMode.AUTO) {
-            snapshotFlow { listState.firstVisibleItemIndex }.collectLatest { index ->
+            snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->
                 headerVisible = index <= previousIndex
                 previousIndex = index
             }
         }
     }
 
-    LaunchedEffect(locateRequest, rows, playingKey, listBottomAligned) {
-        if (locateRequest == 0 || playingKey == null) return@LaunchedEffect
-        val index = rows.indexOfFirst { row ->
+    val playingRowIndex = remember(rows, playingKey) {
+        rows.indexOfFirst { row ->
             row is HomeRow.Audio && row.item.key == playingKey
         }
-        if (index >= 0) {
-            listState.animateScrollToItem(index)
+    }
+    LaunchedEffect(locateRequest, playingKey, playingRowIndex, listBottomAligned) {
+        if (locateRequest == 0 || playingKey == null || playingRowIndex < 0) {
+            return@LaunchedEffect
         }
+        listState.animateScrollToItem(playingRowIndex)
     }
 
     Column(
@@ -184,7 +186,7 @@ private fun HomeRowWithActions(
     onDelete: (HomeRow) -> Unit,
     content: @Composable (onLongClick: () -> Unit) -> Unit,
 ) {
-    var menuExpanded by remember(rowKey(row)) { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxWidth()) {
         content { menuExpanded = true }
@@ -289,7 +291,9 @@ private fun calculateScrollbarMetrics(
     val viewportHeight = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset).toFloat()
     if (layoutInfo.totalItemsCount == 0 || visibleItems.isEmpty() || viewportHeight <= 0f) return null
 
-    val averageItemHeight = visibleItems.map { it.size }.average().toFloat()
+    var totalItemHeight = 0.0
+    visibleItems.forEach { item -> totalItemHeight += item.size }
+    val averageItemHeight = (totalItemHeight / visibleItems.size).toFloat()
     val averageItemExtent = averageItemHeight + itemSpacingPx
     val estimatedContentHeight = averageItemExtent * layoutInfo.totalItemsCount
     val scrollRangePx = (estimatedContentHeight - viewportHeight).coerceAtLeast(0f)

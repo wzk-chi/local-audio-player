@@ -15,8 +15,17 @@ class AutoSkipRepository(
 ) {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private val _state = MutableStateFlow(store.readSegments())
+    @Volatile
+    private var index = SegmentIndex(
+        byContentHash = buildSegmentIndex(_state.value),
+        revision = 0L,
+    )
 
     val state: StateFlow<List<AutoSkipSegment>> = _state.asStateFlow()
+
+    /** Changes whenever the indexed rule set changes, so playback can invalidate its cache. */
+    val revision: Long
+        get() = index.revision
 
     @Synchronized
     fun add(item: AudioItem, startMs: Long, endMs: Long): AutoSkipSegment? {
@@ -62,12 +71,8 @@ class AutoSkipRepository(
         return updated
     }
 
-    @Synchronized
-    fun segmentsFor(contentHash: String): List<AutoSkipSegment> = _state.value
-        .asSequence()
-        .filter { it.contentHash == contentHash }
-        .sortedBy { it.startMs }
-        .toList()
+    fun segmentsFor(contentHash: String): List<AutoSkipSegment> =
+        index.byContentHash[contentHash].orEmpty()
 
     @Synchronized
     fun reconcile(validContentHashes: Set<String>, unresolvedAudioUris: Set<String>) {
@@ -131,8 +136,14 @@ class AutoSkipRepository(
     }
 
     private fun updateSegments(transform: (List<AutoSkipSegment>) -> List<AutoSkipSegment>) {
-        val next = transform(_state.value)
-        if (next == _state.value) return
+        val current = _state.value
+        val next = transform(current)
+        if (next == current) return
+        val currentIndex = index
+        index = SegmentIndex(
+            byContentHash = buildSegmentIndex(next),
+            revision = nextRevision(currentIndex.revision),
+        )
         _state.value = next
         persist(next)
     }
@@ -161,7 +172,21 @@ class AutoSkipRepository(
         }
     }
 
+    private data class SegmentIndex(
+        val byContentHash: Map<String, List<AutoSkipSegment>>,
+        val revision: Long,
+    )
+
     private companion object {
+        fun buildSegmentIndex(
+            segments: List<AutoSkipSegment>,
+        ): Map<String, List<AutoSkipSegment>> =
+            segments.groupBy { it.contentHash }
+                .mapValues { (_, sameHash) -> sameHash.sortedBy { it.startMs } }
+
+        fun nextRevision(current: Long): Long =
+            if (current == Long.MAX_VALUE) 0L else current + 1L
+
         fun isInPath(path: String, parent: String): Boolean =
             path == parent || (parent.isNotEmpty() && path.startsWith("$parent/"))
 

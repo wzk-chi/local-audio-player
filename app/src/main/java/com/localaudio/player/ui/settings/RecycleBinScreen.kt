@@ -266,7 +266,7 @@ private fun RecycleFolderRow(
                 text = if (entry.children.isEmpty()) {
                     entry.description
                 } else {
-                    "${entry.children.sumOf { it.audioCount() }} 个音频 · ${entry.description}"
+                    "${entry.audioCount} 个音频 · ${entry.description}"
                 },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -383,12 +383,14 @@ private sealed interface RecycleEntry {
     val title: String
     val description: String
     val deletedAtMs: Long
+    val audioCount: Int
 
     data class Audio(private val item: RecycleItem) : RecycleEntry {
         override val key: String = "item:${item.key}"
         override val title: String = item.title
         override val description: String = displayPath(item.folderName, item.relativePath)
         override val deletedAtMs: Long = item.deletedAtMs
+        override val audioCount: Int = 1
     }
 
     data class Folder(
@@ -403,6 +405,7 @@ private sealed interface RecycleEntry {
         override val description: String = folder?.relativePath?.ifBlank { "源文件夹" } ?: relativePath
         override val deletedAtMs: Long = folder?.deletedAtMs
             ?: children.maxOfOrNull { it.deletedAtMs } ?: 0L
+        override val audioCount: Int = children.sumOf { it.audioCount }
     }
 }
 
@@ -505,10 +508,13 @@ private fun findFolder(entries: List<RecycleEntry>, path: List<String>): Recycle
 }
 
 private fun selectionKeys(entry: RecycleEntry): Set<String> = buildSet {
-    add(entry.key)
-    if (entry is RecycleEntry.Folder) {
-        entry.children.forEach { addAll(selectionKeys(it)) }
+    fun collect(current: RecycleEntry) {
+        add(current.key)
+        if (current is RecycleEntry.Folder) {
+            current.children.forEach(::collect)
+        }
     }
+    collect(entry)
 }
 
 private fun updateSelection(
@@ -527,24 +533,30 @@ private fun updateSelection(
 }
 
 private fun normalizeSelection(entries: List<RecycleEntry>, selected: MutableSet<String>): Set<String> {
-    fun normalize(entry: RecycleEntry) {
-        if (entry is RecycleEntry.Folder) {
-            entry.children.forEach(::normalize)
-            val childKeys = entry.children.flatMapTo(HashSet(), ::selectionKeys)
-            if (childKeys.isNotEmpty() && selected.containsAll(childKeys)) {
-                selected += entry.key
-            } else if (childKeys.isNotEmpty()) {
-                selected -= entry.key
+    fun normalize(entry: RecycleEntry): Boolean = when (entry) {
+        is RecycleEntry.Audio -> entry.key in selected
+        is RecycleEntry.Folder -> {
+            val childrenFullySelected = if (entry.children.isEmpty()) {
+                true
+            } else {
+                var allSelected = true
+                entry.children.forEach { child ->
+                    if (!normalize(child)) allSelected = false
+                }
+                allSelected
             }
+            if (entry.children.isNotEmpty()) {
+                if (childrenFullySelected) {
+                    selected += entry.key
+                } else {
+                    selected -= entry.key
+                }
+            }
+            entry.key in selected && childrenFullySelected
         }
     }
     entries.forEach(::normalize)
     return selected
-}
-
-private fun RecycleEntry.audioCount(): Int = when (this) {
-    is RecycleEntry.Audio -> 1
-    is RecycleEntry.Folder -> children.sumOf { it.audioCount() }
 }
 
 private fun isInPath(path: String, parent: String): Boolean =

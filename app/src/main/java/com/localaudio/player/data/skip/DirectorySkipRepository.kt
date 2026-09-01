@@ -12,11 +12,22 @@ class DirectorySkipRepository(
 ) {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private val _state = MutableStateFlow(store.readRules())
+    @Volatile
+    private var index = RuleIndex(
+        byFolderAndPath = buildRuleIndex(_state.value),
+        revision = 0L,
+    )
 
     val state: StateFlow<List<DirectorySkipRule>> = _state.asStateFlow()
 
-    fun ruleFor(folderUri: String, relativePath: String): DirectorySkipRule? = _state.value
-        .firstOrNull { it.folderUri == folderUri && it.relativePath == relativePath }
+    /** Changes whenever the indexed rule set changes, so playback can invalidate its cache. */
+    val revision: Long
+        get() = index.revision
+
+    fun ruleFor(folderUri: String, relativePath: String): DirectorySkipRule? {
+        val currentIndex = index
+        return currentIndex.byFolderAndPath[folderUri]?.get(relativePath)
+    }
 
     fun save(folderUri: String, relativePath: String, startSeconds: Long, endSeconds: Long) {
         val start = startSeconds.coerceAtLeast(0L)
@@ -59,14 +70,42 @@ class DirectorySkipRepository(
         }
     }
 
+    @Synchronized
     private fun updateRules(transform: (List<DirectorySkipRule>) -> List<DirectorySkipRule>) {
-        val next = transform(_state.value)
-        if (next == _state.value) return
+        val current = _state.value
+        val next = transform(current)
+        if (next == current) return
+        val currentIndex = index
+        index = RuleIndex(
+            byFolderAndPath = buildRuleIndex(next),
+            revision = nextRevision(currentIndex.revision),
+        )
         _state.value = next
         executor.execute { runCatching { store.writeRules(next) } }
     }
 
+    private data class RuleIndex(
+        val byFolderAndPath: Map<String, Map<String, DirectorySkipRule>>,
+        val revision: Long,
+    )
+
     private companion object {
+        fun buildRuleIndex(
+            rules: List<DirectorySkipRule>,
+        ): Map<String, Map<String, DirectorySkipRule>> {
+            val byFolder = HashMap<String, MutableMap<String, DirectorySkipRule>>()
+            rules.forEach { rule ->
+                val byPath = byFolder.getOrPut(rule.folderUri) { HashMap() }
+                if (rule.relativePath !in byPath) {
+                    byPath[rule.relativePath] = rule
+                }
+            }
+            return byFolder.mapValues { (_, rulesByPath) -> rulesByPath.toMap() }
+        }
+
+        fun nextRevision(current: Long): Long =
+            if (current == Long.MAX_VALUE) 0L else current + 1L
+
         fun isInPath(path: String, parent: String): Boolean =
             path == parent || (parent.isNotEmpty() && path.startsWith("$parent/"))
 

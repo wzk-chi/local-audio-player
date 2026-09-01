@@ -11,10 +11,11 @@ internal const val CONTENT_HASH_ALGORITHM = "xxHash64"
 /** Calculates a content hash without loading the whole audio file into memory. */
 internal class AudioHashCalculator(context: Context) {
     private val contentResolver = context.contentResolver
+    private val hashFactory = XXHashFactory.fastestJavaInstance()
 
     fun calculate(uri: Uri): String? = try {
         contentResolver.openInputStream(uri)?.use { input ->
-            val hash: StreamingXXHash64 = XXHashFactory.fastestJavaInstance().newStreamingHash64(0)
+            val hash: StreamingXXHash64 = hashFactory.newStreamingHash64(0)
             val buffer = ByteArray(BUFFER_SIZE)
             while (true) {
                 if (Thread.currentThread().isInterrupted) throw InterruptedException()
