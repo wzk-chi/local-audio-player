@@ -1,8 +1,6 @@
 package com.localaudio.player.ui.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,15 +12,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -135,36 +136,32 @@ fun EqualizerScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EqualizerPresetSelector(
     preset: EqualizerPreset,
     onPresetSelected: (EqualizerPreset) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Box(
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            ),
-        ) {
-            ListItem(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = true },
-                headlineContent = { Text(stringResource(R.string.equalizer_preset)) },
-                trailingContent = {
-                    Text(
-                        text = presetLabel(preset),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            )
-        }
-        DropdownMenu(
+        OutlinedTextField(
+            value = presetLabel(preset),
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            label = { Text(stringResource(R.string.equalizer_preset)) },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+        )
+        ExposedDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
