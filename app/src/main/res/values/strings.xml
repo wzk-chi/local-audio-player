@@ -47,8 +47,8 @@
     <string name="settings_show_when_locked">锁屏上方显示</string>
     <string name="settings_playback">播放</string>
     <string name="settings_seek_step">快进 / 快退跨度</string>
-    <string name="settings_fade">淡入淡出</string>
-    <string name="settings_fade_duration">效果时长</string>
+    <string name="settings_fade">淡入</string>
+    <string name="settings_fade_duration">淡入时长</string>
     <string name="settings_loudness">音量均衡</string>
     <string name="settings_equalizer">均衡器</string>
     <string name="settings_equalizer_off">关闭</string>

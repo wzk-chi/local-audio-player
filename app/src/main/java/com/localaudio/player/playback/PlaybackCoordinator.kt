@@ -45,14 +45,11 @@ class PlaybackCoordinator(
     private var fadeInStartedAtMs: Long? = null
     private var fadeTickActive = false
     private var outputVolume = 1f
-    private var fadeOutStartedAtMs = 0L
-    private var fadeOutStartVolume = 1f
     private var loudnessCurrentGainDb = 0f
     private var loudnessTargetGainDb = 0f
     private var loudnessTransitionStartedAtMs: Long? = null
     private var loudnessTransitionStartDb = 0f
     private var loudnessTransitionActive = false
-    private var pendingTrackSelection: TrackSelection? = null
     private var autoSkipPreview: AutoSkipPreview? = null
     private var cachedSkipRanges: List<SkipRange> = emptyList()
     private var cachedSkipContentHash: String? = null
@@ -73,19 +70,14 @@ class PlaybackCoordinator(
         override fun run() {
             tickScheduled = false
             checkTimer()
-            if (pendingTrackSelection == null) {
-                checkAutoSkipPreview()
-                checkAutoSkip()
-                updateLoudnessGain()
-                updateFadeVolume()
-            } else {
-                updateFadeOut()
-            }
+            checkAutoSkipPreview()
+            checkAutoSkip()
+            updateLoudnessGain()
+            updateFadeVolume()
             persistPositionIfNeeded()
             publishState()
             if (player?.isPlaying() == true || timerState.expireAt > 0L ||
                 (timerState.waitingForTrackEnd && player?.isPlaying() == true) ||
-                pendingTrackSelection != null ||
                 loudnessTransitionActive
             ) {
                 scheduleTick()
@@ -188,7 +180,6 @@ class PlaybackCoordinator(
             shouldPlay = true,
             restartAutomaticTimer = true,
             targetQueue = items.toList(),
-            fadeOut = true,
         )
     }
 
@@ -199,7 +190,6 @@ class PlaybackCoordinator(
             index = index,
             shouldPlay = true,
             restartAutomaticTimer = true,
-            fadeOut = true,
         )
     }
 
@@ -207,7 +197,6 @@ class PlaybackCoordinator(
         val start = startMs.coerceAtLeast(0L)
         val end = endMs.coerceAtLeast(0L)
         if (items.isEmpty() || end <= start) return
-        cancelPendingTrackSelection()
         queue = items.toList()
         currentIndex = index.coerceIn(0, queue.lastIndex)
         consecutiveLoadFailures = 0
@@ -256,7 +245,6 @@ class PlaybackCoordinator(
     }
 
     private fun pause() {
-        cancelPendingTrackSelection()
         desiredPlaying = false
         pausePlayer()
         persistPlayback()
@@ -295,7 +283,6 @@ class PlaybackCoordinator(
                     index = move.index,
                     shouldPlay = shouldPlay,
                     restartAutomaticTimer = shouldPlay,
-                    fadeOut = true,
                 )
             }
 
@@ -304,7 +291,6 @@ class PlaybackCoordinator(
     }
 
     private fun seekTo(positionMs: Long) {
-        cancelPendingTrackSelection()
         val target = positionMs.coerceIn(0L, currentDuration())
         savedPositionMs = target
         pendingSeekMs = target
@@ -356,7 +342,6 @@ class PlaybackCoordinator(
         shouldPlay: Boolean,
         restartAutomaticTimer: Boolean,
         targetQueue: List<AudioItem> = queue,
-        fadeOut: Boolean = false,
     ) {
         if (targetQueue.isEmpty()) return
         autoSkipPreview = null
@@ -366,7 +351,6 @@ class PlaybackCoordinator(
             shouldPlay = shouldPlay,
             restartAutomaticTimer = restartAutomaticTimer,
         )
-        if (fadeOut && startTrackTransition(selection)) return
         applyTrackSelection(selection)
     }
 
@@ -411,7 +395,6 @@ class PlaybackCoordinator(
         val oldIndex = currentIndex
         val nextQueue = queue.filterNot { it.key in keys }
         if (nextQueue.isEmpty()) {
-            cancelPendingTrackSelection()
             desiredPlaying = false
             player?.release()
             queue = emptyList()
@@ -428,7 +411,6 @@ class PlaybackCoordinator(
                 index = nextIndex,
                 shouldPlay = wasPlaying,
                 restartAutomaticTimer = wasPlaying,
-                fadeOut = wasPlaying,
                 targetQueue = nextQueue,
             )
         } else {
@@ -441,7 +423,6 @@ class PlaybackCoordinator(
     }
 
     private fun applyTrackSelection(selection: TrackSelection) {
-        pendingTrackSelection = null
         autoSkipPreview = null
         queue = selection.queue
         currentIndex = selection.index
@@ -480,10 +461,6 @@ class PlaybackCoordinator(
     private fun handleTerminal(failed: Boolean) {
         if (handledTerminalGeneration == currentGeneration) return
         handledTerminalGeneration = currentGeneration
-        pendingTrackSelection?.let {
-            applyTrackSelection(it)
-            return
-        }
         if (autoSkipPreview?.audioKey == queue.getOrNull(currentIndex)?.key) {
             if (player?.isPrepared == true) savedPositionMs = player?.positionMs() ?: savedPositionMs
             desiredPlaying = false
@@ -537,7 +514,6 @@ class PlaybackCoordinator(
                     index = move.index,
                     shouldPlay = shouldPlay,
                     restartAutomaticTimer = manual && shouldPlay,
-                    fadeOut = manual,
                 )
             }
 
@@ -567,7 +543,6 @@ class PlaybackCoordinator(
         ) {
             TimerDecision.None -> Unit
             TimerDecision.StopNow -> {
-                cancelPendingTrackSelection()
                 desiredPlaying = false
                 pausePlayer()
                 timerState = sleepTimer.stop()
@@ -725,47 +700,6 @@ class PlaybackCoordinator(
             (!desiredPlaying && player?.isPlaying() != true)
         ) return
         queue.getOrNull(currentIndex)?.let(loudnessRepository::ensureAnalysis)
-    }
-
-    private fun startTrackTransition(selection: TrackSelection): Boolean {
-        val currentPlayer = player
-        if (!settingsRepository.state.value.fadeEnabled ||
-            currentPlayer?.isPrepared != true || !currentPlayer.isPlaying()
-        ) {
-            return false
-        }
-        if (pendingTrackSelection == null) {
-            fadeOutStartedAtMs = SystemClock.uptimeMillis()
-            fadeOutStartVolume = outputVolume
-            fadeTickActive = true
-        }
-        pendingTrackSelection = selection
-        rescheduleFadeTick()
-        return true
-    }
-
-    private fun updateFadeOut() {
-        val selection = pendingTrackSelection ?: return
-        val currentPlayer = player
-        val settings = settingsRepository.state.value
-        if (!settings.fadeEnabled || currentPlayer?.isPrepared != true) {
-            applyTrackSelection(selection)
-            return
-        }
-        val elapsed = (SystemClock.uptimeMillis() - fadeOutStartedAtMs).coerceAtLeast(0L)
-        val progress = (elapsed.toFloat() / fadeDurationMs(settings.fadeDurationMs).toFloat())
-            .coerceIn(0f, 1f)
-        setOutputVolume(currentPlayer, fadeOutStartVolume * (1f - progress))
-        if (progress >= 1f) {
-            applyTrackSelection(selection)
-        }
-    }
-
-    private fun cancelPendingTrackSelection() {
-        if (pendingTrackSelection == null) return
-        pendingTrackSelection = null
-        fadeTickActive = false
-        player?.takeIf { it.isPrepared }?.let { setOutputVolume(it, 1f) }
     }
 
     private fun fadeDurationMs(value: Long): Long = value
